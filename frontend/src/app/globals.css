@@ -1,0 +1,65 @@
+@import "tailwindcss";
+
+/* Палитра и фон */
+:root {
+  --bg-grad-from: #0b1220;
+  --bg-grad-to: #0f172a;
+  --glass-bg: rgba(255, 255, 255, 0.06);
+  --glass-border: rgba(255, 255, 255, 0.12);
+}
+
+html, body { height: 100%; }
+body {
+  color: rgb(226 232 240); /* text-slate-200 */
+  background:
+    radial-gradient(1200px 600px at 0% 0%, #0c1a2a 0%, transparent 60%),
+    radial-gradient(800px 400px at 100% 0%, #0a2238 0%, transparent 55%),
+    linear-gradient(180deg, var(--bg-grad-from) 0%, var(--bg-grad-to) 100%);
+  margin: 0;
+}
+
+/* Контейнер */
+.container-xxl {
+  max-width: 1280px;
+  width: 100%;
+  margin: 0 auto;
+  padding-left: 1.25rem;
+  padding-right: 1.25rem;
+}
+
+/* Стекло */
+.glass {
+  background: var(--glass-bg);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid var(--glass-border);
+  border-radius: 16px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, .35);
+}
+
+/* Пилюли */
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  padding: 4px 12px;
+  border-radius: 9999px;
+  border: 1px solid var(--glass-border);
+  background: rgba(255,255,255,.04);
+}
+
+/* Чипы категорий */
+.chip {
+  display: inline-flex; align-items: center; border-radius: 9999px;
+  padding: 2px 8px; font-size: 12px; gap: 6px; border: 1px solid rgba(255,255,255,.12);
+  background: rgba(255,255,255,.06);
+}
+.chip-console { background: rgba(56,189,248,.15); border-color: rgba(56,189,248,.25); }
+.chip-accessory { background: rgba(139,92,246,.15); border-color: rgba(139,92,246,.25); }
+.chip-disk { background: rgba(34,197,94,.15); border-color: rgba(34,197,94,.25); }
+.chip-service { background: rgba(250,204,21,.15); border-color: rgba(250,204,21,.25); }
+.chip-key { background: rgba(244,63,94,.15); border-color: rgba(244,63,94,.25); }
+
+/* Системные отступы */
+.section { margin-bottom: 24px; }

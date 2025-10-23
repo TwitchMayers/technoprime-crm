@@ -1,0 +1,256 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+/**
+ * === ENUMS ===
+ */
+enum Role {
+  ADMIN
+  MANAGER
+}
+
+enum Position {
+  OWNER
+  MANAGER
+  TECHNICIAN
+}
+
+enum PaymentMethod {
+  CASH
+  TRANSFER
+  TRADE_IN
+}
+
+enum OrderStatus {
+  NEW
+  IN_PROGRESS
+  COMPLETED
+  CANCELED
+}
+
+enum TaskType {
+  CALL
+  DELIVERY
+  SUBSCRIPTION_RENEWAL
+  TRADE_IN
+  OTHER
+}
+
+enum TaskStatus {
+  NEW
+  IN_PROGRESS
+  DONE
+}
+
+enum SubscriptionType {
+  PS_PLUS
+  GAME_PASS
+  EA_PLAY
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  EXPIRED
+}
+
+enum ProductCategory {
+  CONSOLE
+  ACCESSORY
+  DISK
+  SERVICE
+  SUBSCRIPTION_KEY
+}
+
+enum KitTier {
+  BASIC
+  STANDARD
+  PREMIUM
+  PRO
+}
+
+/**
+ * === MODELS ===
+ */
+model Employee {
+  id                   Int            @id @default(autoincrement())
+  name                 String
+  firstName            String?
+  lastName             String?
+  position             Position?
+  login                String         @unique
+  passwordHash         String
+  role                 Role           @default(MANAGER)
+  createdAt            DateTime       @default(now())
+  orders               Order[]        @relation("OrderManager")
+  createdOrders        Order[]        @relation("OrderCreator")
+  tasks                Task[]         @relation("TaskAssignedTo")
+  managedSubscriptions Subscription[] @relation("SubscriptionManager")
+  comments             OrderComment[]
+  notifications        Notification[]
+}
+
+model Client {
+  id            Int            @id @default(autoincrement())
+  name          String
+  phone         String
+  city          String?
+  address       String?
+  consoleType   String?
+  notes         String?
+  status        String?
+  createdAt     DateTime       @default(now())
+  orders        Order[]
+  subscriptions Subscription[]
+  tasks         Task[]         @relation("TaskClient")
+  tradeIns      TradeIn[]      @relation("ClientTradeIns")
+}
+
+model Product {
+  id         Int             @id @default(autoincrement())
+  name       String
+  category   ProductCategory
+  brand      String?
+  model      String?
+  version    String?
+  stock      Int             @default(0)
+  costPrice  Decimal         @db.Decimal(10, 2)
+  price      Decimal         @db.Decimal(10, 2)
+  isActive   Boolean         @default(true)
+  isArchived Boolean         @default(false)
+  archivedAt DateTime?
+  kitItems   KitItem[]
+  orderItems OrderItem[]
+
+  @@index([isArchived, category])
+}
+
+model Kit {
+  id        Int       @id @default(autoincrement())
+  name      String
+  tier      KitTier
+  items     KitItem[]
+  createdAt DateTime  @default(now())
+}
+
+model KitItem {
+  id        Int     @id @default(autoincrement())
+  kit       Kit     @relation(fields: [kitId], references: [id], onDelete: Cascade)
+  kitId     Int
+  product   Product @relation(fields: [productId], references: [id])
+  productId Int
+  qty       Int     @default(1)
+}
+
+model Order {
+  id                Int            @id @default(autoincrement())
+  date              DateTime       @default(now())
+  client            Client         @relation(fields: [clientId], references: [id])
+  clientId          Int
+  manager           Employee?      @relation("OrderManager", fields: [managerId], references: [id])
+  managerId         Int?
+  createdBy         Employee       @relation("OrderCreator", fields: [createdById], references: [id])
+  createdById       Int
+  status            OrderStatus    @default(NEW)
+  paymentMethod     PaymentMethod
+  totalPrice        Decimal        @db.Decimal(10, 2)
+  costPrice         Decimal        @db.Decimal(10, 2)
+  profit            Decimal        @db.Decimal(10, 2)
+  comment           String?
+  archiveOnComplete Boolean        @default(false)
+  items             OrderItem[]
+  tradeIn           TradeIn?
+  comments          OrderComment[]
+  Task              Task[]
+}
+
+model OrderItem {
+  id        Int     @id @default(autoincrement())
+  order     Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  orderId   Int
+  product   Product @relation(fields: [productId], references: [id])
+  productId Int
+  qty       Int     @default(1)
+  unitPrice Decimal @db.Decimal(10, 2)
+  unitCost  Decimal @db.Decimal(10, 2)
+  lineTotal Decimal @db.Decimal(10, 2)
+  lineCost  Decimal @db.Decimal(10, 2)
+}
+
+model OrderComment {
+  id        Int      @id @default(autoincrement())
+  order     Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  orderId   Int
+  author    Employee @relation(fields: [authorId], references: [id])
+  authorId  Int
+  text      String
+  createdAt DateTime @default(now())
+}
+
+model Subscription {
+  id        Int                @id @default(autoincrement())
+  client    Client             @relation(fields: [clientId], references: [id])
+  clientId  Int
+  type      SubscriptionType
+  startDate DateTime
+  endDate   DateTime
+  status    SubscriptionStatus @default(ACTIVE)
+  manager   Employee?          @relation("SubscriptionManager", fields: [managerId], references: [id])
+  managerId Int?
+  createdAt DateTime           @default(now())
+}
+
+model Task {
+  id           Int        @id @default(autoincrement())
+  title        String
+  type         TaskType
+  assignedTo   Employee   @relation("TaskAssignedTo", fields: [assignedToId], references: [id])
+  assignedToId Int
+  client       Client?    @relation("TaskClient", fields: [clientId], references: [id])
+  clientId     Int?
+  order        Order?     @relation(fields: [orderId], references: [id]) // NEW
+  orderId      Int? // NEW
+  dueDate      DateTime
+  status       TaskStatus @default(NEW)
+  comment      String?
+  createdAt    DateTime   @default(now())
+}
+
+model TradeIn {
+  id             Int      @id @default(autoincrement())
+  client         Client   @relation("ClientTradeIns", fields: [clientId], references: [id])
+  clientId       Int
+  oldModel       String
+  estimatedValue Decimal  @db.Decimal(10, 2)
+  surcharge      Decimal  @db.Decimal(10, 2)
+  newOrder       Order?   @relation(fields: [newOrderId], references: [id])
+  newOrderId     Int?     @unique
+  createdAt      DateTime @default(now())
+}
+
+model AnalyticsDaily {
+  id            Int      @id @default(autoincrement())
+  date          DateTime @unique
+  totalSales    Int      @default(0)
+  totalRevenue  Decimal  @db.Decimal(12, 2)
+  totalProfit   Decimal  @db.Decimal(12, 2)
+  avgCheck      Decimal  @db.Decimal(12, 2)
+  activeClients Int      @default(0)
+}
+
+model Notification {
+  id        Int       @id @default(autoincrement())
+  user      Employee  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId    Int
+  type      String
+  payload   Json?
+  readAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId, readAt])
+}

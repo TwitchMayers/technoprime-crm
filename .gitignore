@@ -1,0 +1,28 @@
+node_modules
+dist
+coverage
+logs
+*.log
+.DS_Store
+.idea
+.vscode
+
+# Next.js
+.next
+out
+.turbo
+
+# Env (в репо НЕ попадают настоящие .env)
+.env
+.env.*
+!.env.example
+backend/.env
+backend/.env.*
+!backend/.env.example
+frontend/.env
+frontend/.env.*
+!frontend/.env.example
+
+# Prisma артефакты
+backend/prisma/*.db
+backend/prisma/migrations/**/steps.json
