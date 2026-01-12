@@ -1,25 +1,47 @@
-import { Body, Controller, Get, Post, Query, Patch, Param, Delete } from '@nestjs/common';
+import { Controller, Get, Post, Patch, Delete, Body, Param, Query } from '@nestjs/common';
+import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
 import { ClientsService } from './clients.service';
+import { CreateClientDto } from './dto/create-client.dto';
 
+@ApiTags('clients')
+@ApiBearerAuth()
 @Controller('clients')
 export class ClientsController {
-  constructor(private svc: ClientsService) {}
+  constructor(private readonly clientsService: ClientsService) {}
 
   @Get()
-  list(
-    @Query('q') q?: string,
-    @Query('city') city?: string,
-    @Query('consoleType') consoleType?: string,
-    @Query('page') page?: string,
-    @Query('limit') limit?: string,
-  ) { return this.svc.list({ q, city, consoleType, page: Number(page) || 1, limit: Number(limit) || 50 }); }
+  @ApiOperation({ summary: 'Получить список клиентов' })
+  @ApiResponse({ status: 200, description: 'Список клиентов получен' })
+  list(@Query() query: any) {
+    return this.clientsService.list(query);
+  }
+
+  @Get(':id')
+  @ApiOperation({ summary: 'Получить клиента с полной историей' })
+  @ApiResponse({ status: 200, description: 'Клиент получен' })
+  findOne(@Param('id') id: string) {
+    return this.clientsService.findOne(Number(id));
+  }
 
   @Post()
-  create(@Body() body: any) { return this.svc.create(body); }
+  @ApiOperation({ summary: 'Создать клиента' })
+  @ApiResponse({ status: 201, description: 'Клиент создан' })
+  @ApiResponse({ status: 400, description: 'Неверные данные' })
+  create(@Body() body: CreateClientDto) {
+    return this.clientsService.create(body);
+  }
 
   @Patch(':id')
-  update(@Param('id') id: string, @Body() body: any) { return this.svc.update(Number(id), body); }
+  @ApiOperation({ summary: 'Обновить клиента' })
+  update(@Param('id') id: string, @Body() body: Partial<CreateClientDto>) {
+    return this.clientsService.update(Number(id), body);
+  }
 
   @Delete(':id')
-  remove(@Param('id') id: string) { return this.svc.remove(Number(id)); }
+  @ApiOperation({ summary: 'Удалить клиента' })
+  @ApiResponse({ status: 200, description: 'Клиент удален' })
+  @ApiResponse({ status: 400, description: 'Нельзя удалить клиента с заказами' })
+  remove(@Param('id') id: string) {
+    return this.clientsService.remove(Number(id));
+  }
 }

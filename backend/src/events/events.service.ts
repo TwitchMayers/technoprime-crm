@@ -3,13 +3,17 @@ import { EventsGateway } from './events.gateway';
 
 @Injectable()
 export class EventsService {
-  constructor(private gw: EventsGateway) {}
+  constructor(private gateway: EventsGateway) {}
 
-  notifyUser(userId: number, type: string, payload: any) {
-    this.gw.emitToUser(userId, 'notification', { type, payload, ts: Date.now() });
+  notifyUser(userId: number, event: string, data: any) {
+    this.gateway.server.emit(`user:${userId}:${event}`, data);
+  }
+
+  broadcast(event: string, data: any) {
+    this.gateway.server.emit(event, data);
   }
 
   queueUpdated() {
-    this.gw.emitQueueUpdate({});
+    this.gateway.server.emit('queueUpdated', { timestamp: Date.now() });
   }
 }

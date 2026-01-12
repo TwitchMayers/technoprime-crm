@@ -1,37 +1,34 @@
 import {
-  WebSocketGateway, SubscribeMessage, MessageBody, ConnectedSocket,
+  WebSocketGateway,
+  WebSocketServer,
+  OnGatewayConnection,
+  OnGatewayDisconnect,
 } from '@nestjs/websockets';
-import { Socket, Server } from 'socket.io';
-import { OnModuleInit } from '@nestjs/common';
+import { Server, Socket } from 'socket.io';
 
 @WebSocketGateway({
-  cors: { origin: [/^http:\/\/localhost:\d+$/, /^http:\/\/127\.0\.0\.1:\d+$/] },
+  cors: {
+    origin: '*',
+    credentials: true,
+  },
 })
-export class EventsGateway implements OnModuleInit {
+export class EventsGateway implements OnGatewayConnection, OnGatewayDisconnect {
+  @WebSocketServer()
   server: Server;
 
-  onModuleInit() {
-    // no-op
-  }
-
   handleConnection(client: Socket) {
-    // клиент после коннекта должен отправить register { userId }
+    console.log(`Client connected: ${client.id}`);
   }
 
-  @SubscribeMessage('register')
-  handleRegister(@MessageBody() data: { userId: number }, @ConnectedSocket() client: Socket) {
-    if (data?.userId) {
-      client.join(`user:${data.userId}`);
-    }
-    client.join('queue'); // общая комната для очереди
-    client.emit('registered', { ok: true });
+  handleDisconnect(client: Socket) {
+    console.log(`Client disconnected: ${client.id}`);
   }
 
-  emitToUser(userId: number, event: string, payload: any) {
-    this.server?.to(`user:${userId}`).emit(event, payload);
+  sendToAll(event: string, data: any) {
+    this.server.emit(event, data);
   }
 
-  emitQueueUpdate(payload?: any) {
-    this.server?.to('queue').emit('queueUpdated', payload || {});
+  sendToUser(userId: number, event: string, data: any) {
+    this.server.emit(`user:${userId}:${event}`, data);
   }
 }

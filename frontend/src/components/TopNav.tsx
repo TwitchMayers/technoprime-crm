@@ -1,48 +1,45 @@
 'use client';
+
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import UserMenu from './UserMenu';
 import NotificationBell from './NotificationBell';
+import UserMenu from './UserMenu';
 
-const nav = [
-  { href: '/dashboard', label: 'Дашборд' },
-  { href: '/clients', label: 'Клиенты' },
-  { href: '/products', label: 'Товары' },
-  { href: '/orders/new', label: 'Новый заказ' },
-  { href: '/tasks', label: 'Задачи' },
-  { href: '/subscriptions', label: 'Подписки' },
+const tabs = [
+  { href: '/dashboard',       label: 'Дашборд' },
+  { href: '/clients',         label: 'Клиенты' },
+  { href: '/products',        label: 'Товары' },
+  { href: '/orders',          label: 'Заказы' },
+  { href: '/orders/new',      label: 'Новый заказ' },
+  { href: '/tasks',           label: 'Задачи' },
+  { href: '/subscriptions',   label: 'Подписки' },
 ];
 
 export default function TopNav() {
-  const p = usePathname();
+  const pathname = usePathname();
   return (
-    <header className="sticky top-0 z-40">
-      <div className="backdrop-blur-md bg-black/20 border-b border-white/10">
-        <div className="container-xxl h-14 flex items-center justify-between">
-          <Link href="/dashboard" className="font-bold tracking-wide text-slate-100">
-            TechnoPrime System
-          </Link>
-          <nav className="hidden md:flex items-center gap-1">
-            {nav.map((item) => (
+    <div className="sticky top-0 z-30 bg-black/40 backdrop-blur border-b border-white/10">
+      <div className="max-w-7xl mx-auto px-4 h-12 flex items-center justify-between">
+        <div className="font-semibold">TechnoPrime System</div>
+        <nav className="flex gap-2">
+          {tabs.map((t) => {
+            const active = pathname?.startsWith(t.href);
+            return (
               <Link
-                key={item.href}
-                href={item.href}
-                className={`px-3 py-2 rounded-md text-sm transition ${
-                  p?.startsWith(item.href)
-                    ? 'bg-white/10 text-white'
-                    : 'text-slate-300 hover:text-white hover:bg-white/5'
-                }`}
+                href={t.href}
+                key={t.href}
+                className={`px-3 py-1.5 rounded-md text-sm ${active ? 'bg-white/15' : 'bg-white/5 hover:bg-white/10'}`}
               >
-                {item.label}
+                {t.label}
               </Link>
-            ))}
-          </nav>
-          <div className="flex items-center gap-2">
-                <NotificationBell />
-                <UserMenu />
-          </div>
+            );
+          })}
+        </nav>
+        <div className="flex items-center gap-2">
+          <NotificationBell />
+          <UserMenu />
         </div>
       </div>
-    </header>
+    </div>
   );
 }

@@ -26,6 +26,3 @@ frontend/.env.*
 # Prisma артефакты
 backend/prisma/*.db
 backend/prisma/migrations/**/steps.json
-
-# Docker/Postgres data
-postgres-data/

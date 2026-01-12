@@ -1,0 +1,119 @@
+.
+├── README.md
+├── create-real-users.ts
+├── eslint.config.mjs
+├── nest-cli.json
+├── package-lock.json
+├── package.json
+├── prisma
+│   ├── migrations
+│   │   ├── 20251022073900_init
+│   │   ├── 20251022210116_i1_profile_roles_status_archive
+│   │   ├── 20251023124336_i2_notifications_fix
+│   │   ├── 20251023162339_i6_tasks_order_link_and_deletes
+│   │   ├── 20251023180557_add_serial_and_instock_to_product
+│   │   ├── 20251024085130_ad_analytics
+│   │   ├── 20251031203414_add_technical_specialist_role
+│   │   ├── 20251031214439_add_account_fields
+│   │   ├── 20251105220414_add_audit_log
+│   │   └── migration_lock.toml
+│   └── schema.prisma
+├── scripts
+│   ├── reset-all.sql
+│   └── reset.sql
+├── seed-users.ts
+├── src
+│   ├── ad-spend
+│   │   ├── ad-spend.controller.ts
+│   │   ├── ad-spend.module.ts
+│   │   └── ad-spend.service.ts
+│   ├── analytics
+│   │   ├── analytics.controller.ts
+│   │   ├── analytics.module.ts
+│   │   └── analytics.service.ts
+│   ├── app.controller.spec.ts
+│   ├── app.controller.ts
+│   ├── app.module.ts
+│   ├── app.service.ts
+│   ├── auth
+│   │   ├── auth.controller.spec.ts
+│   │   ├── auth.controller.ts
+│   │   ├── auth.module.ts
+│   │   ├── auth.service.spec.ts
+│   │   ├── auth.service.ts
+│   │   ├── jwt-auth.guard.ts
+│   │   ├── jwt.strategy.ts
+│   │   ├── roles.decorator.ts
+│   │   └── roles.guard.ts
+│   ├── cache
+│   │   └── cache.module.ts
+│   ├── clients
+│   │   ├── clients.controller.spec.ts
+│   │   ├── clients.controller.ts
+│   │   ├── clients.module.ts
+│   │   ├── clients.service.spec.ts
+│   │   ├── clients.service.ts
+│   │   └── dto
+│   ├── common
+│   │   ├── decorators
+│   │   ├── dto
+│   │   ├── filters
+│   │   ├── guards
+│   │   └── interceptors
+│   ├── config
+│   │   └── env.validation.ts
+│   ├── employees
+│   │   ├── employees.controller.spec.ts
+│   │   ├── employees.controller.ts
+│   │   ├── employees.module.ts
+│   │   ├── employees.service.spec.ts
+│   │   └── employees.service.ts
+│   ├── events
+│   │   ├── events.gateway.ts
+│   │   ├── events.module.ts
+│   │   └── events.service.ts
+│   ├── inventory
+│   │   ├── dto
+│   │   ├── inventory.controller.ts
+│   │   ├── inventory.module.ts
+│   │   └── inventory.service.ts
+│   ├── main.ts
+│   ├── notifications
+│   │   ├── notifications.controller.ts
+│   │   ├── notifications.module.ts
+│   │   └── notifications.service.ts
+│   ├── orders
+│   │   ├── dto
+│   │   ├── orders.controller.spec.ts
+│   │   ├── orders.controller.ts
+│   │   ├── orders.module.ts
+│   │   ├── orders.service.spec.ts
+│   │   └── orders.service.ts
+│   ├── prisma.service.ts
+│   ├── products
+│   │   ├── dto
+│   │   ├── products.controller.spec.ts
+│   │   ├── products.controller.ts
+│   │   ├── products.module.ts
+│   │   ├── products.service.spec.ts
+│   │   └── products.service.ts
+│   ├── subscriptions
+│   │   ├── subscriptions.controller.spec.ts
+│   │   ├── subscriptions.controller.ts
+│   │   ├── subscriptions.module.ts
+│   │   ├── subscriptions.service.spec.ts
+│   │   └── subscriptions.service.ts
+│   └── tasks
+│       ├── tasks.controller.spec.ts
+│       ├── tasks.controller.ts
+│       ├── tasks.module.ts
+│       ├── tasks.service.spec.ts
+│       └── tasks.service.ts
+├── structure.txt
+├── test
+│   ├── app.e2e-spec.ts
+│   └── jest-e2e.json
+├── tsconfig.build.json
+└── tsconfig.json
+
+39 directories, 78 files

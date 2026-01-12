@@ -1,37 +1,54 @@
 'use client';
+
 import { useEffect, useState } from 'react';
+import { User, Settings as SettingsIcon } from 'lucide-react';
+import Link from 'next/link';
 
 export default function UserMenu() {
-  const [user, setUser] = useState<any>(null);
   const [open, setOpen] = useState(false);
+  const [me, setMe] = useState<any>(null);
 
   useEffect(() => {
-    fetch('/api/me')
-      .then(r => r.ok ? r.json() : null)
-      .then(setUser)
-      .catch(() => {});
+    fetch('/api/me').then(r=>r.json()).then(setMe).catch(()=>null);
   }, []);
 
-  if (!user) return null;
-
-  const name = user.firstName || user.lastName ? `${user.firstName || ''} ${user.lastName || ''}`.trim() : user.name;
-  const role = user.position || user.role;
+  const name = me?.name || (me?.firstName || me?.lastName ? `${me.firstName||''} ${me.lastName||''}`.trim() : 'Профиль');
 
   return (
     <div className="relative">
-      <button onClick={() => setOpen(o => !o)} className="px-3 py-2 rounded-md border border-white/10 bg-white/5 hover:bg-white/10 transition">
-        {name} • {role}
-      </button>
-      {open && (
-        <div className="absolute right-0 mt-2 w-44 glass p-2">
-          <a href="/profile" className="block px-3 py-2 rounded hover:bg-white/5">Профиль</a>
-          <button
-            className="w-full text-left px-3 py-2 rounded hover:bg-white/5"
-            onClick={() => { localStorage.removeItem('token'); window.location.href = '/login'; }}
-          >
-            Выйти
-          </button>
+      <button
+        className="flex items-center gap-2 px-3 py-2 rounded-md bg-white/5 hover:bg-white/10 transition"
+        onClick={() => setOpen(!open)}
+      >
+        <div className="w-8 h-8 rounded-full bg-gradient-to-br from-purple-500 to-teal-500 flex items-center justify-center">
+          <User className="w-4 h-4" />
         </div>
+        <span className="text-sm hidden md:inline">{name}</span>
+      </button>
+
+      {open && (
+        <>
+          <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
+          <div className="absolute right-0 mt-2 w-64 glass p-2 z-50 animate-fade-in">
+            <div className="p-2">
+              <div className="text-white font-medium">{name}</div>
+              <div className="text-xs text-slate-400">{me?.role || me?.position}</div>
+            </div>
+            <div className="border-t border-white/10 my-2" />
+            <Link className="block px-3 py-2 rounded hover:bg-white/10 transition text-sm" href="/profile">
+              Личный кабинет
+            </Link>
+            {me?.role === 'ADMIN' && (
+              <Link className="block px-3 py-2 rounded hover:bg-white/10 transition text-sm" href="/profile/admin">
+                Админ‑панель
+              </Link>
+            )}
+            <Link className="flex items-center gap-2 px-3 py-2 rounded hover:bg-white/10 transition text-sm" href="/profile">
+              <SettingsIcon className="w-4 h-4" />
+              Настройки
+            </Link>
+          </div>
+        </>
       )}
     </div>
   );

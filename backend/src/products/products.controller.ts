@@ -1,31 +1,72 @@
-import { Body, Controller, Get, Patch, Post, Query, Param, Delete } from '@nestjs/common';
+import { 
+  Controller, 
+  Get, 
+  Post, 
+  Patch, 
+  Delete, 
+  Body, 
+  Param, 
+  Query,
+  UseGuards,
+} from '@nestjs/common';
+import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
+import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { ProductsService } from './products.service';
 
+@ApiTags('products')
+@ApiBearerAuth()
 @Controller('products')
+@UseGuards(JwtAuthGuard)
 export class ProductsController {
-  constructor(private svc: ProductsService) {}
+  constructor(private readonly productsService: ProductsService) {}
 
   @Get()
-  list(
-    @Query('isArchived') isArchived?: string,
-    @Query('q') q?: string,
-    @Query('category') category?: string,
-    @Query('page') page?: string,
-    @Query('limit') limit?: string,
-  ) {
-    const flag = typeof isArchived === 'string' ? isArchived === 'true' : undefined;
-    return this.svc.list({ isArchived: flag, q, category, page: Number(page) || 1, limit: Number(limit) || 50 });
+  @ApiOperation({ summary: 'Получить список товаров' })
+  @ApiResponse({ status: 200, description: 'Список товаров' })
+  async list(@Query() query: any) {
+    return this.productsService.list(query);
+  }
+
+  @Get(':id')
+  @ApiOperation({ summary: 'Получить товар по ID' })
+  @ApiResponse({ status: 200, description: 'Товар найден' })
+  @ApiResponse({ status: 404, description: 'Товар не найден' })
+  async findOne(@Param('id') id: string) {
+    return this.productsService.findOne(Number(id));
   }
 
   @Post()
-  create(@Body() body: any) { return this.svc.create(body); }
+  @ApiOperation({ summary: 'Создать новый товар' })
+  @ApiResponse({ status: 201, description: 'Товар создан' })
+  async create(@Body() body: any) {
+    return this.productsService.create(body);
+  }
 
-  @Patch(':id/archive')
-  archive(@Param('id') id: string) { return this.svc.archive(Number(id), true); }
-
-  @Patch(':id/unarchive')
-  unarchive(@Param('id') id: string) { return this.svc.archive(Number(id), false); }
+  @Patch(':id')
+  @ApiOperation({ summary: 'Обновить товар' })
+  @ApiResponse({ status: 200, description: 'Товар обновлен' })
+  async update(@Param('id') id: string, @Body() body: any) {
+    return this.productsService.update(Number(id), body);
+  }
 
   @Delete(':id')
-  remove(@Param('id') id: string) { return this.svc.remove(Number(id)); }
+  @ApiOperation({ summary: 'Удалить товар' })
+  @ApiResponse({ status: 200, description: 'Товар удален' })
+  async remove(@Param('id') id: string) {
+    return this.productsService.remove(Number(id));
+  }
+
+  @Patch(':id/archive')
+  @ApiOperation({ summary: 'Архивировать товар' })
+  @ApiResponse({ status: 200, description: 'Товар архивирован' })
+  async archive(@Param('id') id: string) {
+    return this.productsService.archive(Number(id));
+  }
+
+  @Patch(':id/unarchive')
+  @ApiOperation({ summary: 'Восстановить товар из архива' })
+  @ApiResponse({ status: 200, description: 'Товар восстановлен' })
+  async unarchive(@Param('id') id: string) {
+    return this.productsService.unarchive(Number(id));
+  }
 }

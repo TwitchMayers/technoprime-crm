@@ -60,7 +60,7 @@ export class EmployeesService {
     if (count === 0) {
       const hash = await bcrypt.hash('admin123', 10);
       await this.prisma.employee.create({
-        data: { name: 'Admin', login: 'admin', passwordHash: hash, role: 'ADMIN', position: 'OWNER' },
+        data: { name: 'Admin', login: 'admin', passwordHash: hash, role: 'SUPER_ADMIN', position: 'OWNER' },
       });
       console.log('Admin user created: login=admin, password=admin123');
     }

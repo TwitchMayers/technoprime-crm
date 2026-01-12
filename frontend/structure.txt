@@ -1,0 +1,74 @@
+src
+├── app
+│   ├── api
+│   │   ├── ad-spend
+│   │   ├── analytics
+│   │   ├── auth
+│   │   ├── clients
+│   │   ├── login
+│   │   ├── me
+│   │   ├── metrics
+│   │   ├── notifications
+│   │   ├── orders
+│   │   ├── products
+│   │   ├── subscriptions
+│   │   └── tasks
+│   ├── clients
+│   │   └── page.tsx
+│   ├── dashboard
+│   │   └── page.tsx
+│   ├── favicon.ico
+│   ├── layout.tsx
+│   ├── login
+│   │   └── page.tsx
+│   ├── logout
+│   │   └── page.tsx
+│   ├── orders
+│   │   ├── new
+│   │   └── page.tsx
+│   ├── page.tsx
+│   ├── products
+│   │   ├── add
+│   │   └── page.tsx
+│   ├── profile
+│   │   ├── admin
+│   │   └── page.tsx
+│   ├── providers.tsx
+│   ├── subscriptions
+│   │   └── page.tsx
+│   └── tasks
+│       ├── TaskDetailsModal.tsx
+│       └── page.tsx
+├── components
+│   ├── Drawer.tsx
+│   ├── MobileNav.tsx
+│   ├── Modal.tsx
+│   ├── NotificationBell.tsx
+│   ├── ProtectedRoute.tsx
+│   ├── Sidebar.tsx
+│   ├── TopNav.tsx
+│   ├── UserMenu.tsx
+│   ├── admin
+│   │   ├── AdSpendForm.tsx
+│   │   └── AnalyticsCharts.tsx
+│   ├── dashboard
+│   │   └── KpiCard.tsx
+│   ├── layout
+│   │   └── Header.tsx
+│   └── ui
+│       ├── Button.tsx
+│       ├── Chip.tsx
+│       └── GlassCard.tsx
+├── contexts
+│   └── AuthContext.tsx
+├── hooks
+│   └── useMobile.ts
+├── lib
+│   ├── api.ts
+│   ├── fetchWithAuth.ts
+│   ├── socket.ts
+│   └── utils.ts
+└── store
+    └── auth.ts
+
+36 directories, 36 files

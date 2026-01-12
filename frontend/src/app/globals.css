@@ -1,65 +1,224 @@
-@import "tailwindcss";
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
 
-/* Палитра и фон */
-:root {
-  --bg-grad-from: #0b1220;
-  --bg-grad-to: #0f172a;
-  --glass-bg: rgba(255, 255, 255, 0.06);
-  --glass-border: rgba(255, 255, 255, 0.12);
+@layer base {
+  body {
+    @apply bg-slate-950 text-slate-100;
+  }
 }
 
-html, body { height: 100%; }
-body {
-  color: rgb(226 232 240); /* text-slate-200 */
-  background:
-    radial-gradient(1200px 600px at 0% 0%, #0c1a2a 0%, transparent 60%),
-    radial-gradient(800px 400px at 100% 0%, #0a2238 0%, transparent 55%),
-    linear-gradient(180deg, var(--bg-grad-from) 0%, var(--bg-grad-to) 100%);
-  margin: 0;
-}
-
-/* Контейнер */
-.container-xxl {
-  max-width: 1280px;
-  width: 100%;
-  margin: 0 auto;
-  padding-left: 1.25rem;
-  padding-right: 1.25rem;
-}
-
-/* Стекло */
+/* Улучшенный стеклоэффект с тенью */
 .glass {
-  background: var(--glass-bg);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  border: 1px solid var(--glass-border);
-  border-radius: 16px;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, .35);
+  @apply backdrop-blur-xl bg-gradient-to-br from-slate-800/40 to-slate-900/40 
+         border border-slate-700/50 rounded-xl shadow-2xl;
 }
 
-/* Пилюли */
-.pill {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 14px;
-  padding: 4px 12px;
-  border-radius: 9999px;
-  border: 1px solid var(--glass-border);
-  background: rgba(255,255,255,.04);
+.glass:hover {
+  @apply border-slate-600/50;
 }
 
-/* Чипы категорий */
-.chip {
-  display: inline-flex; align-items: center; border-radius: 9999px;
-  padding: 2px 8px; font-size: 12px; gap: 6px; border: 1px solid rgba(255,255,255,.12);
-  background: rgba(255,255,255,.06);
+/* Карточки KPI */
+.kpi-card {
+  @apply glass p-6 hover:scale-[1.02] transition-all duration-300;
+  background: linear-gradient(135deg, rgba(30, 41, 59, 0.5) 0%, rgba(15, 23, 42, 0.5) 100%);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
 }
-.chip-console { background: rgba(56,189,248,.15); border-color: rgba(56,189,248,.25); }
-.chip-accessory { background: rgba(139,92,246,.15); border-color: rgba(139,92,246,.25); }
-.chip-disk { background: rgba(34,197,94,.15); border-color: rgba(34,197,94,.25); }
-.chip-service { background: rgba(250,204,21,.15); border-color: rgba(250,204,21,.25); }
-.chip-key { background: rgba(244,63,94,.15); border-color: rgba(244,63,94,.25); }
 
-/* Системные отступы */
-.section { margin-bottom: 24px; }
+/* Градиентные акценты */
+.gradient-purple {
+  @apply bg-gradient-to-r from-purple-600 to-purple-700;
+}
+
+.gradient-teal {
+  @apply bg-gradient-to-r from-teal-600 to-cyan-600;
+}
+
+.gradient-amber {
+  @apply bg-gradient-to-r from-amber-500 to-orange-600;
+}
+
+.gradient-rose {
+  @apply bg-gradient-to-r from-rose-500 to-pink-600;
+}
+
+/* Кнопки с улучшенным контрастом */
+.btn-primary {
+  @apply px-4 py-2 rounded-lg bg-gradient-to-r from-purple-600 to-purple-700 
+         hover:from-purple-500 hover:to-purple-600 
+         text-white font-medium shadow-lg shadow-purple-500/30
+         transition-all duration-200;
+}
+
+.btn-success {
+  @apply px-4 py-2 rounded-lg bg-gradient-to-r from-teal-600 to-cyan-600 
+         hover:from-teal-500 hover:to-cyan-500 
+         text-white font-medium shadow-lg shadow-teal-500/30
+         transition-all duration-200;
+}
+
+.btn-danger {
+  @apply px-4 py-2 rounded-lg bg-gradient-to-r from-rose-600 to-pink-600 
+         hover:from-rose-500 hover:to-pink-500 
+         text-white font-medium shadow-lg shadow-rose-500/30
+         transition-all duration-200;
+}
+
+.btn-secondary {
+  @apply px-4 py-2 rounded-lg bg-slate-700/50 hover:bg-slate-600/50 
+         text-slate-200 font-medium border border-slate-600/50
+         transition-all duration-200;
+}
+
+/* Улучшенные инпуты */
+input, select, textarea {
+  @apply bg-slate-800/50 border border-slate-600/50 text-slate-100 
+         placeholder-slate-500 rounded-lg px-4 py-2.5
+         focus:outline-none focus:ring-2 focus:ring-purple-500/50 focus:border-purple-500
+         transition-all duration-200;
+}
+
+input:disabled, select:disabled {
+  @apply opacity-50 cursor-not-allowed;
+}
+
+/* Таблицы с лучшим контрастом */
+table {
+  @apply w-full;
+}
+
+thead {
+  @apply bg-slate-800/60 backdrop-blur-sm;
+}
+
+thead th {
+  @apply p-4 text-left text-slate-300 font-semibold text-sm uppercase tracking-wider;
+}
+
+tbody tr {
+  @apply border-b border-slate-700/50 hover:bg-slate-800/30 transition-colors;
+}
+
+tbody td {
+  @apply p-4 text-slate-200;
+}
+
+tbody tr:last-child {
+  @apply border-b-0;
+}
+
+/* Статус бейджи */
+.badge {
+  @apply px-3 py-1.5 rounded-full text-xs font-bold inline-flex items-center gap-1.5;
+}
+
+.badge-success {
+  @apply bg-emerald-500/20 text-emerald-400 border border-emerald-500/30;
+}
+
+.badge-warning {
+  @apply bg-amber-500/20 text-amber-400 border border-amber-500/30;
+}
+
+.badge-danger {
+  @apply bg-rose-500/20 text-rose-400 border border-rose-500/30;
+}
+
+.badge-info {
+  @apply bg-sky-500/20 text-sky-400 border border-sky-500/30;
+}
+
+/* Скроллбар */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: rgba(30, 41, 59, 0.3);
+  border-radius: 4px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, rgba(139, 92, 246, 0.6) 0%, rgba(139, 92, 246, 0.8) 100%);
+  border-radius: 4px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(180deg, rgba(139, 92, 246, 0.8) 0%, rgba(139, 92, 246, 1) 100%);
+}
+
+/* Текст с тенью для лучшей читаемости */
+.text-shadow {
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
+}
+
+.line-clamp-2 {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* Анимации */
+@keyframes shimmer {
+  0% { background-position: -200% center; }
+  100% { background-position: 200% center; }
+}
+
+.shimmer {
+  background: linear-gradient(90deg, 
+    transparent 0%, 
+    rgba(255, 255, 255, 0.1) 50%, 
+    transparent 100%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 2s infinite;
+}
+
+/* Карточки с акцентами */
+.accent-card {
+  @apply relative overflow-hidden;
+}
+
+.accent-card::before {
+  content: '';
+  @apply absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-purple-500 to-teal-500;
+}
+
+/* Тени для глубины */
+.shadow-glow-purple {
+  box-shadow: 0 0 20px rgba(139, 92, 246, 0.3);
+}
+
+.shadow-glow-teal {
+  box-shadow: 0 0 20px rgba(20, 184, 166, 0.3);
+}
+
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+/* Мобильная адаптация */
+@media (max-width: 768px) {
+  .mobile-sidebar {
+    @apply fixed inset-y-0 left-0 z-50 w-64 transform transition-transform duration-300;
+  }
+  
+  .mobile-sidebar.closed {
+    @apply -translate-x-full;
+  }
+  
+  .mobile-main {
+    @apply w-full;
+  }
+
+  .mobile-compact {
+    @apply p-3;
+  }
+}
