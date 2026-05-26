@@ -36,3 +36,7 @@ frontend/.env.*
 # Prisma артефакты
 backend/prisma/*.db
 backend/prisma/migrations/**/steps.json
+
+.npmrc
+shop/shop/
+legacy/scripts/dump_before_reset.sql
