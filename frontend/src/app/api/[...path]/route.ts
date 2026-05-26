@@ -45,7 +45,7 @@ function getErrorProperty(error: unknown, key: 'name' | 'message') {
   return '';
 }
 
-// ✅ ФИКС: Исправляем params как Promise
+// Next route params are resolved before proxying.
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ path: string[] }> }
@@ -81,14 +81,12 @@ export async function PATCH(
   return handleRequest(request, params, 'PATCH');
 }
 
-// ✅ ФИКС: Исправляем handleRequest
 async function handleRequest(
   request: NextRequest,
   params: Promise<{ path: string[] }>,
   method: string
 ) {
   try {
-    // ✅ ОБЯЗАТЕЛЬНО: await перед params
     const resolvedParams = await params;
     const path = resolvedParams.path.join('/');
     
@@ -96,8 +94,7 @@ async function handleRequest(
     const cookie = request.headers.get('cookie') || '';
     const tokenFromCookie = readTokenFromCookieHeader(cookie);
     
-    // ✅ КРИТИЧЕСКИЙ ФИКС: Убираем дублирование /api
-    // Если BACKEND_URL уже содержит /api в конце, не добавляем его снова
+    // Avoid duplicating `/api` when BACKEND_URL already includes it.
     const baseUrl = BACKEND_URL.endsWith('/') ? BACKEND_URL.slice(0, -1) : BACKEND_URL;
     const apiPath = baseUrl.endsWith('/api') ? `${baseUrl}/${path}` : `${baseUrl}/api/${path}`;
     
@@ -164,7 +161,7 @@ async function handleRequest(
     }
 
     if (API_PROXY_DEBUG) {
-      console.log(`🔄 Proxy ${method}: ${url.toString()}`);
+      console.log(`Proxy ${method}: ${url.toString()}`);
     }
 
     const response = await fetch(url.toString(), init).finally(() => {

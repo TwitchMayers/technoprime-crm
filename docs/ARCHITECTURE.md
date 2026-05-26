@@ -27,3 +27,6 @@ Shop auth (phone + Telegram):
 - Add Prisma models for `ShopCustomer`, `ShopSession`, `ShopOrder`
 - Add `shop-auth` module in backend
 - Add API gateway routes for shop (public read, private write)
+
+## Development notes
+- Check the local Next.js docs in `node_modules/next/dist/docs/` before changing framework-specific APIs or file conventions.

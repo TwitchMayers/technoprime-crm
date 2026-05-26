@@ -99,7 +99,7 @@ export default function TaskDetailPage() {
 
     if (!user?.id) {
       toast.error('Ошибка авторизации. Пожалуйста, перезагрузитесь');
-      // ❌ УБРАЛ router.push('/login') - AuthContext это сделает
+      // AuthContext handles the redirect.
       return;
     }
 

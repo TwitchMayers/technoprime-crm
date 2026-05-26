@@ -6,7 +6,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 export default function Header({ user }:{ user?: { name?:string; role?:string } }) {
   const [open, setOpen] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
-  const [notifications] = useState<any[]>([]); // подключи сокеты при желании
+  const [notifications] = useState<any[]>([]);
 
   return (
     <header className="header-gradient sticky top-0 z-40">

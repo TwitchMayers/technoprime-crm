@@ -63,10 +63,8 @@ async function bootstrap() {
     prefix: '/assets/',
   });
 
-  // ВКЛЮЧАЕМ ГЛОБАЛЬНЫЙ ПРЕФИКС
+  // Global API prefix.
   app.setGlobalPrefix('api');
-
-  // НЕ ВЫЗЫВАЕМ app.enableCors() - уже настроили выше
 
   const employees = app.get(EmployeesService, { strict: false });
   const port = Number(process.env.PORT || 4000);

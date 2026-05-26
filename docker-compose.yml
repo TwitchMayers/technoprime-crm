@@ -6,9 +6,9 @@ services:
     platform: linux/arm64
     container_name: crm_postgres
     environment:
-      POSTGRES_USER: crm_user
-      POSTGRES_PASSWORD: crm_pass
-      POSTGRES_DB: crm_db
+      POSTGRES_USER: ${POSTGRES_USER:-crm_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change_me_local_only}
+      POSTGRES_DB: ${POSTGRES_DB:-crm_db}
     ports:
       - "5432:5432"
     volumes:
@@ -20,4 +20,3 @@ services:
     container_name: crm_redis
     ports:
       - "6379:6379"
-      

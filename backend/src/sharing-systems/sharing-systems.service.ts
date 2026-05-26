@@ -396,7 +396,7 @@ export class SharingSystemsService {
 
     this.assertSlotCompatible(system.donor.consoleType, data.consoleType, system.clientSlots);
 
-    // ✅ ПРОВЕРКА 1: клиент не должен быть добавлен ни в одну систему шеринга
+    // Клиент не должен быть добавлен ни в одну систему шеринга.
     const existingClientSlot = await this.prisma.clientSlot.findFirst({
       where: {
         clientId: data.clientId,
@@ -410,7 +410,7 @@ export class SharingSystemsService {
       );
     }
 
-    // ✅ ПРОВЕРКА 2: проверяем что клиент уже не добавлен в эту систему с этой консолью
+    // Клиент не должен дублироваться в этой системе с этой консолью.
     const duplicateSlot = await this.prisma.clientSlot.findFirst({
       where: {
         AND: [
@@ -498,7 +498,7 @@ export class SharingSystemsService {
     if (!slot) throw new NotFoundException('Слот не найден');
 
     return this.prisma.$transaction(async tx => {
-      // ✅ НОВОЕ: удаляем ВСЕ подписки этого клиента в этой системе
+      // Удаляем все подписки этого клиента в этой системе.
       // (может быть несколько если клиент подключен к PS5 и PS4)
       await tx.subscription.deleteMany({
         where: {
@@ -506,7 +506,7 @@ export class SharingSystemsService {
         },
       });
 
-      // ✅ Удаляем слот
+      // Удаляем слот
       const deletedSlot = await tx.clientSlot.delete({
         where: { id: slotId },
       });
@@ -561,14 +561,14 @@ export class SharingSystemsService {
         },
         include: {
           clientSlots: {
-            where: { isActive: true }, // ✅ Только активные слоты
+            where: { isActive: true }, // Только активные слоты
           },
         },
         take: 50,
         orderBy: { createdAt: 'desc' },
       });
 
-      // ✅ ИСПРАВЛЕНО: фильтруем корректно
+      // Фильтруем только активные слоты.
       const availableClients = clients.filter(client => {
         // Исключаем клиентов с активными слотами в любой системе
         const hasActiveSlots = client.clientSlots && client.clientSlots.length > 0;
@@ -624,7 +624,7 @@ export class SharingSystemsService {
       );
     }
 
-    // ✅ ПРОВЕРКА: клиент не должен быть добавлен ни в одну систему шеринга
+    // Клиент не должен быть добавлен ни в одну систему шеринга.
     const existingClientSlot = await this.prisma.clientSlot.findFirst({
       where: {
         clientId: data.clientId,
@@ -638,7 +638,7 @@ export class SharingSystemsService {
       );
     }
 
-    // ✅ ПРОВЕРКА: такой же донорский слот в этой системе
+    // Проверяем такой же донорский слот в этой системе.
     const existingDonorAccess = await this.prisma.clientSlot.findFirst({
       where: {
         sharingSystemId: data.sharingSystemId,

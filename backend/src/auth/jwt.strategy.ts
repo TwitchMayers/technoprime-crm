@@ -60,9 +60,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       throw new UnauthorizedException('User not found');
     }
 
-    // ⚠️ ВАЖНО:
-    // Возвращаем ТОЛЬКО реальные данные из БД
-    // Никаких дефолтов, никаких фейков
+    // Return only persisted user data from the database.
     return {
       id: user.id,
       login: user.login,

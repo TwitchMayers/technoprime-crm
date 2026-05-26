@@ -91,7 +91,7 @@ export class TasksController {
       }
     }
 
-    // ✅ Обновляем задачу
+    // Обновляем задачу
     const task = await this.tasksService.update(
       taskId,
       {
@@ -101,7 +101,7 @@ export class TasksController {
       shouldAcceptTask ? { acceptedByUserId: userId } : undefined,
     );
 
-    // ✅ КЛЮЧЕВОЕ ДОБАВЛЕНИЕ: синхронизируем статус заказа если это задача с заказом
+    // Синхронизируем статус заказа, если задача связана с заказом.
     if (task?.orderId && status === 'DONE') {
       try {
         // Вызываем метод синхронизации из OrdersService
@@ -110,7 +110,7 @@ export class TasksController {
           Number(req?.user?.id || 0) || undefined,
         );
       } catch (err) {
-        console.error(`❌ Failed to sync order #${task.orderId} status:`, err.message);
+        console.error(`Failed to sync order #${task.orderId} status:`, err.message);
       }
     }
 

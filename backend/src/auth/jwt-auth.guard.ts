@@ -7,7 +7,7 @@ export class JwtAuthGuard extends AuthGuard('jwt') {
     const request = context.switchToHttp().getRequest();
     const path: string = request.url || '';
 
-    // ✅ Разрешаем без JWT ТОЛЬКО auth-эндпоинты
+    // Auth endpoints remain available before a JWT is issued.
     if (path.startsWith('/auth/login') || path.startsWith('/auth/logout')) {
       return true;
     }

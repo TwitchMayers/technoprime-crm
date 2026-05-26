@@ -27,12 +27,12 @@ export default function MobileNav() {
   const { user, logout: authLogout } = useAuth();
   const pathname = usePathname();
 
-  // ✅ Правильный колбэк для закрытия меню
+  // Правильный колбэк для закрытия меню
   const handleClose = useCallback(() => {
     setIsOpen(false);
   }, []);
 
-  // ✅ Правильный колбэк для логаута
+  // Правильный колбэк для логаута
   const handleLogout = useCallback(async () => {
     handleClose();
     await authLogout();

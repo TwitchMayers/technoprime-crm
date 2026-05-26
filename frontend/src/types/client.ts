@@ -27,8 +27,8 @@ export type ClientOrder = {
   status: string;
   totalPrice: number | string;
   items: OrderItem[];
-  createdBy?: OrderUser; // ✅ КТО СОЗДАЛ
-  manager?: OrderUser;   // ✅ КТО ВЁЛ / БЫЛ НАЗНАЧЕН
+  createdBy?: OrderUser; // Автор заказа.
+  manager?: OrderUser;   // Ответственный менеджер.
   completedBy?: OrderUser;
 };
 

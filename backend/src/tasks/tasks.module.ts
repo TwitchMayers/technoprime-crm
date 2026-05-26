@@ -5,9 +5,7 @@ import { PrismaService } from '../prisma.service';
 import { OrdersModule } from '../orders/orders.module';
 
 @Module({
-  imports: [
-    forwardRef(() => OrdersModule), // ✅ ДОБАВИТЬ
-  ],
+  imports: [forwardRef(() => OrdersModule)],
   controllers: [TasksController],
   providers: [TasksService, PrismaService],
   exports: [TasksService],

@@ -20,7 +20,7 @@ import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 export class OrdersController {
   constructor(private readonly ordersService: OrdersService) {}
 
-  // ✅ Список заказов с фильтрацией
+  // Список заказов с фильтрацией
   @Get()
   async list(
     @Query('status') status?: string,
@@ -42,19 +42,19 @@ export class OrdersController {
     });
   }
 
-  // ✅ Очередь новых заказов (ДОЛЖНА БЫТЬ ПЕРЕД /:id)
+  // Queue route must stay before /:id.
   @Get('queue')
   async queue() {
     return this.ordersService.queue();
   }
 
-  // ✅ Получить один заказ (ПОСЛЕ /queue)
+  // Single-order route follows /queue.
   @Get(':id')
   async findOne(@Param('id') id: string) {
     return this.ordersService.findOne(Number(id));
   }
 
-  // ✅ Создать заказ
+  // Создать заказ
   @Post()
   async create(@Body() body: any, @Req() req: any) {
     const userId = Number(req?.user?.id);
@@ -92,14 +92,14 @@ export class OrdersController {
     );
   }
 
-  // ✅ Назначить заказ - PATCH /api/orders/:id/assign
+  // Назначить заказ - PATCH /api/orders/:id/assign
   @Patch(':id/assign')
   async assignPatch(@Param('id') id: string, @Body() body: any, @Req() req: any) {
     const assigneeId = Number(body?.assigneeId ?? req?.user?.id ?? 0);
     return this.ordersService.assign(Number(id), assigneeId);
   }
 
-  // ✅ Назначить заказ - POST /api/orders/:id/assign
+  // Назначить заказ - POST /api/orders/:id/assign
   @Post(':id/assign')
   async assignPost(@Param('id') id: string, @Body() body: any, @Req() req: any) {
     const assigneeId = Number(body?.assigneeId ?? req?.user?.id ?? 0);
@@ -141,7 +141,7 @@ export class OrdersController {
     return this.ordersService.extendReserve(Number(id), minutes, actorId);
   }
 
-  // ✅ Изменить статус заказа - PATCH /api/orders/:id/status
+  // Изменить статус заказа - PATCH /api/orders/:id/status
   @Patch(':id/status')
   async setStatusPatch(@Param('id') id: string, @Body() body: any, @Req() req: any) {
     const status = String(body?.status || 'NEW');
@@ -152,7 +152,7 @@ export class OrdersController {
     return this.ordersService.setStatus(Number(id), status as any, archiveOnComplete, managerId);
   }
 
-  // ✅ Изменить статус заказа - POST /api/orders/:id/status
+  // Изменить статус заказа - POST /api/orders/:id/status
   @Post(':id/status')
   async setStatusPost(@Param('id') id: string, @Body() body: any, @Req() req: any) {
     const status = String(body?.status || 'NEW');
@@ -163,13 +163,13 @@ export class OrdersController {
     return this.ordersService.setStatus(Number(id), status as any, archiveOnComplete, managerId);
   }
 
-  // ✅ Получить комментарии заказа
+  // Получить комментарии заказа
   @Get(':id/comments')
   async getComments(@Param('id') id: string) {
     return this.ordersService.comments(Number(id));
   }
 
-  // ✅ Добавить комментарий к заказу
+  // Добавить комментарий к заказу
   @Post(':id/comments')
   async addComment(
     @Param('id') id: string,
@@ -185,7 +185,7 @@ export class OrdersController {
     return this.ordersService.addComment(Number(id), authorId, body.text);
   }
 
-  // ✅ Удалить заказ
+  // Удалить заказ
   @Delete(':id')
   async delete(@Param('id') id: string, @Req() req: any) {
     const adminId = Number(req?.user?.id);

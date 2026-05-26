@@ -111,7 +111,7 @@ export async function fetchWithAuth(
 
   const execute = async () => {
     if (debugFetch) {
-      console.log(`🔍 Fetch: ${method} ${fullUrl}`);
+      console.log(`Fetch: ${method} ${fullUrl}`);
     }
 
     const timeoutMs = buildRequestTimeoutMs(method);
@@ -139,7 +139,7 @@ export async function fetchWithAuth(
       });
 
       if (debugFetch) {
-        console.log(`📡 Response: ${response.status} ${response.statusText}`);
+        console.log(`Response: ${response.status} ${response.statusText}`);
       }
 
       if (response.status === 401) {

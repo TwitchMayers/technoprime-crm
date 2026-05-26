@@ -19,13 +19,13 @@ function getBackendUrl() {
 function attachSocketListeners(instance: Socket) {
   instance.on('connect', () => {
     if (SOCKET_DEBUG) {
-      console.log('✅ WebSocket connected');
+      console.log('WebSocket connected');
     }
   });
 
   instance.on('disconnect', () => {
     if (SOCKET_DEBUG) {
-      console.log('❌ WebSocket disconnected');
+      console.log('WebSocket disconnected');
     }
   });
 

@@ -572,7 +572,7 @@ export class ClientsService {
         skip,
         take: limit,
         include: {
-          // ✅ АКТИВНАЯ ПОДПИСКА
+          // Активная подписка.
           subscriptions: {
             where: { status: 'ACTIVE' as any },
             include: {
@@ -588,7 +588,7 @@ export class ClientsService {
             orderBy: { endDate: 'desc' },
             take: 1,
           },
-          // ✅ ИСТОРИЯ ЗАВЕРШЁННЫХ ЗАКАЗОВ (сокращённая версия для списка)
+          // Сокращённая история завершённых заказов для списка.
           orders: {
             where: { status: OrderStatus.COMPLETED },
             include: {
@@ -871,7 +871,7 @@ export class ClientsService {
           orderBy: { endDate: 'desc' },
           take: 1,
         },
-        // ✅ ПОЛНАЯ ИСТОРИЯ ЗАКАЗОВ СО ВСЕМИ ДЕТАЛЯМИ
+        // Полная история заказов со всеми деталями.
         orders: {
           where: { status: OrderStatus.COMPLETED },
           include: {
@@ -889,14 +889,14 @@ export class ClientsService {
                 },
               },
             },
-            // ✅ КТО СОЗДАЛ ЗАКАЗ
+            // Автор заказа.
             createdBy: {
               select: {
                 id: true,
                 name: true,
               },
             },
-            // ✅ КТО ЗАКРЫЛ/НАЗНАЧИЛ ЗАКАЗ
+            // Ответственный менеджер.
             manager: {
               select: {
                 id: true,

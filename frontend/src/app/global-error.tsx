@@ -59,16 +59,15 @@ export default function GlobalError({ error, reset }: GlobalErrorProps) {
             <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-rose-500/15 text-rose-300">
               <AlertTriangle className="h-6 w-6" />
             </div>
-            <h1 className="mt-4 text-xl font-bold text-white">CRM временно не открылась</h1>
+            <h1 className="mt-4 text-xl font-bold text-white">CRM временно недоступна</h1>
             <p className="mt-2 text-sm leading-6 text-slate-300">
-              На устройстве произошёл client-side сбой при загрузке интерфейса. Обычно это бывает после обновления
-              фронтенда, когда браузер держит старые ресурсы.
+              Не удалось загрузить интерфейс. Обычно помогает обновить страницу и очистить старые файлы приложения.
             </p>
 
             <div className="mt-4 rounded-2xl border border-slate-700/70 bg-slate-900/70 px-4 py-3 text-xs leading-5 text-slate-400">
               {isRuntimeMismatch
-                ? 'Похоже на рассинхронизацию старого клиента и нового билда. Можно безопасно перезагрузить приложение и очистить старые runtime-ресурсы.'
-                : 'Если ошибка повторится после перезагрузки, значит источник уже в прикладном коде, и мы продолжим его дожимать отдельно.'}
+                ? 'Похоже, браузер сохранил устаревшие файлы. Можно безопасно обновить приложение.'
+                : 'Если ошибка повторится после обновления, свяжитесь с администратором.'}
             </div>
 
             <div className="mt-5 grid gap-2">
@@ -87,7 +86,7 @@ export default function GlobalError({ error, reset }: GlobalErrorProps) {
                 className="inline-flex min-h-11 items-center justify-center gap-2 rounded-2xl border border-slate-700/70 bg-slate-900/70 px-4 text-sm font-semibold text-slate-100 transition hover:bg-slate-800 disabled:opacity-60"
               >
                 <RefreshCw className={`h-4 w-4 ${recovering ? 'animate-spin' : ''}`} />
-                {recovering ? 'Перезагружаем…' : 'Очистить старый runtime и перезагрузить'}
+                {recovering ? 'Перезагружаем…' : 'Обновить приложение'}
               </button>
               <a
                 href="/login"

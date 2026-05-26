@@ -117,7 +117,7 @@ export default function ProductsPage() {
   return (
     <ProtectedRoute allowedRoles={['ADMIN', 'TECHNICAL_SPECIALIST', 'SUPER_ADMIN']}>
       <div className="space-y-6">
-        {/* ✅ Header - ИСПРАВЛЕНО */}
+        {/* Header */}
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
             <h1 className="text-2xl font-bold bg-gradient-to-r from-purple-400 to-teal-400 bg-clip-text text-transparent">

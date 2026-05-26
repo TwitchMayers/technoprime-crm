@@ -107,7 +107,7 @@ export default function AssignDonorPage() {
         toast.info('Нет доступных клиентов для добавления к донору.');
       }
     } catch (error: any) {
-      console.error('❌ Error searching clients:', error);
+      console.error('Error searching clients:', error);
       toast.error(`Ошибка поиска: ${error.message}`);
       setClients([]);
     } finally {
@@ -153,7 +153,7 @@ export default function AssignDonorPage() {
       toast.success('Клиент успешно добавлен для доступа к донорской консоли');
       router.push(`/sharing-systems/${params.id}`);
     } catch (error: any) {
-      console.error('❌ Error assigning donor client:', error);
+      console.error('Error assigning donor client:', error);
       toast.error(error.message || 'Ошибка добавления клиента');
     } finally {
       setAssigning(false);

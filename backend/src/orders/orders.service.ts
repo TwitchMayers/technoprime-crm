@@ -323,7 +323,7 @@ export class OrdersService {
     return idsToArchive.length;
   }
 
-  // ✅ НОВЫЙ МЕТОД: синхронизация статуса заказа по статусу задач
+  // Синхронизация статуса заказа по статусу задач.
   async syncOrderStatusFromTasks(orderId: number, actorId?: number | null): Promise<void> {
     const order = await this.prisma.order.findUnique({
       where: { id: orderId },
@@ -1071,7 +1071,7 @@ export class OrdersService {
       : this.enumValue(SettlementStatus, dto.settlementStatus, SettlementStatus.NOT_REQUIRED);
 
     const created = await this.prisma.$transaction(async tx => {
-      // ✅ 1. Создаём заказ
+      // 1. Создаём заказ
       const order = await tx.order.create({
         data: {
           clientId: dto.clientId,
@@ -1098,7 +1098,7 @@ export class OrdersService {
       let totalCost = new Decimal(0);
       let firstSerial: string | null = null;
 
-      // ✅ 2. Обрабатываем товары
+      // 2. Обрабатываем товары
       for (const it of dto.items) {
         const qty = Math.max(1, Number(it.qty || 1));
 
@@ -1167,7 +1167,7 @@ export class OrdersService {
         totalCost = totalCost.add(lc);
       }
 
-      // ✅ 3. Обновляем итоговые цены заказа
+      // 3. Обновляем итоговые цены заказа
       await tx.order.update({
         where: { id: order.id },
         data: {
@@ -1230,7 +1230,7 @@ export class OrdersService {
         });
       }
 
-      // ✅ 4. Создаём подписку если нужна
+      // 4. Создаём подписку если нужна
       if (dto.subscription?.createSubscription && dto.subscription.type) {
         try {
           if (
@@ -1278,11 +1278,11 @@ export class OrdersService {
         }
       }
 
-      // ✅ 5. Стартовая ответственность за задачу — создатель заказа.
+      // 5. Стартовая ответственность за задачу — создатель заказа.
       // Задача переходит конкретному исполнителю только после явного принятия (админ/техник).
       const assigneeDefaultId = createdById;
 
-      // ✅ 6. Создаём задачу
+      // 6. Создаём задачу
       try {
         const task = await tx.task.create({
           data: {
@@ -1301,13 +1301,13 @@ export class OrdersService {
           },
         });
       } catch (taskError) {
-        console.warn('⚠️ Failed to create task for order:', taskError.message);
+        console.warn('Failed to create task for order:', taskError.message);
       }
 
       return order;
     });
 
-    // ✅ 7. Отправляем уведомления (вне транзакции)
+    // 7. Отправляем уведомления (вне транзакции)
     try {
       await this.prisma.notification.create({
         data: {

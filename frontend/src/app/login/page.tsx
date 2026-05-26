@@ -23,7 +23,7 @@ export default function LoginPage() {
   const [leaving, setLeaving] = useState(false);
   const [forceShowLogin, setForceShowLogin] = useState(false);
 
-  // ✅ Редирект если уже авторизован
+  // Редирект если уже авторизован
   useEffect(() => {
     if (isAuthenticated && user) {
       setLeaving(true);
@@ -66,7 +66,7 @@ export default function LoginPage() {
     setLoading(true);
 
     try {
-      // ✅ Используем метод login из AuthContext
+      // Используем метод login из AuthContext
       await login(loginInput, password);
       
       if (remember) {

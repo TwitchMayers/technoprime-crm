@@ -825,7 +825,6 @@ export class ProductsService {
         where.storefrontCategory = { not: null };
       }
 
-      // ✅ ИСПРАВЛЕНО: только валидные категории
       const validCategories = ['CONSOLE', 'ACCESSORY', 'DISK', 'SERVICE', 'SUBSCRIPTION_KEY'];
 
       if (query?.category && query.category !== 'all' && validCategories.includes(query.category)) {

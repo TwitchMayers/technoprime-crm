@@ -83,7 +83,7 @@ export default function NewSharingSystemPage() {
       toast.success('Система шеринга создана!');
       router.push('/sharing-systems');
     } catch (error: any) {
-      console.error('❌ Error creating sharing system:', error);
+      console.error('Error creating sharing system:', error);
       toast.error(error.message || 'Ошибка создания системы');
     } finally {
       setLoading(false);

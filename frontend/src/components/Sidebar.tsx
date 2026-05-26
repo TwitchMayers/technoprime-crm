@@ -114,7 +114,7 @@ export default function Sidebar() {
   const pathname = usePathname();
   const { user, logout: authLogout } = useAuth();
 
-  // ✅ ВСЕ HOOKS СРАЗУ - БЕЗ УСЛОВИЙ!
+  // Hooks are declared before any conditional return.
   const [notifs, setNotifs] = useState<Notif[]>([]);
   const [notifOpen, setNotifOpen] = useState(false);
   const [soundEnabled, setSoundEnabled] = useState(true);
@@ -139,7 +139,7 @@ export default function Sidebar() {
 
   // WebSocket уведомления
   useEffect(() => {
-    if (!user) return; // ✅ Условие ВНУТРИ useEffect, а не до него!
+    if (!user) return;
 
     const socket = getSocket();
 
@@ -235,7 +235,7 @@ export default function Sidebar() {
     authLogout();
   }, [authLogout]);
 
-  // ✅ EARLY RETURNS - ТОЛЬКО СЕЙЧАС, ПОСЛЕ ВСЕХ HOOKS!
+  // Conditional returns start after hook declarations.
   if (pathname === '/login' || pathname === '/register') {
     return null;
   }

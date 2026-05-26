@@ -143,7 +143,7 @@ export default function AssignClientPage() {
         toast.info('Нет доступных клиентов. Все клиенты либо уже подключены к системам шеринга, либо не совпадают с поиском.');
       }
     } catch (error: any) {
-      console.error('❌ Error searching clients:', error);
+      console.error('Error searching clients:', error);
       toast.error(`Ошибка поиска: ${error.message || 'Неизвестная ошибка'}`);
       setClients([]);
     } finally {
@@ -189,7 +189,7 @@ export default function AssignClientPage() {
       toast.success('Клиент успешно добавлен в систему шеринга');
       router.push(`/sharing-systems/${params.id}`);
     } catch (error: any) {
-      console.error('❌ Error assigning client:', error);
+      console.error('Error assigning client:', error);
       toast.error(error.message || 'Ошибка добавления клиента');
     } finally {
       setAssigning(false);
