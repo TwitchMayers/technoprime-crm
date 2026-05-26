@@ -12,7 +12,7 @@ import {
 } from 'class-validator';
 import { Transform } from 'class-transformer';
 
-const channels = ['TELEGRAM', 'VK', 'MAX'] as const;
+const channels = ['TELEGRAM', 'VK'] as const;
 const audienceTypes = ['ALL', 'ACTIVE_ORDERS', 'SUBSCRIPTIONS', 'REGISTERED_RANGE'] as const;
 
 export class CreateMarketingCampaignDto {

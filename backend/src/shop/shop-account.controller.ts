@@ -117,18 +117,6 @@ export class ShopAccountController {
     return this.shopVk.createVkLinkCode(customerId);
   }
 
-  @Post('linked/max/unlink')
-  @ApiOperation({ summary: 'Отвязать MAX от аккаунта магазина' })
-  @ApiResponse({ status: 200 })
-  async unlinkMax(@Req() req: Request) {
-    const customerId = await this.getCustomerId(req);
-    if (!customerId) {
-      throw new ForbiddenException('Not authorized');
-    }
-
-    return this.shopAccount.unlinkMax(customerId);
-  }
-
   @Post('cookie-consent')
   @ApiOperation({ summary: 'Сохранить выбор cookies-consent' })
   @ApiResponse({ status: 200 })

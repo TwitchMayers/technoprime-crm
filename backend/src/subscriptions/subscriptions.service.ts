@@ -555,7 +555,6 @@ export class SubscriptionsService {
       const channels: Array<{ channel: CommunicationChannel; target?: string | null }> = [
         { channel: CommunicationChannel.TELEGRAM, target: s.client?.telegramId || null },
         { channel: CommunicationChannel.VK, target: s.client?.vkId || null },
-        { channel: CommunicationChannel.MAX, target: s.client?.maxId || null },
       ];
 
       for (const channel of channels) {

@@ -52,11 +52,6 @@ export class CreateClientDto {
   vkId?: string;
 
   @IsOptional()
-  @IsString()
-  @MaxLength(64)
-  maxId?: string;
-
-  @IsOptional()
   @IsBoolean()
   marketingConsent?: boolean;
 }

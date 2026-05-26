@@ -1,6 +1,6 @@
 import { IsIn, IsOptional, IsString, IsUrl, MaxLength, ValidateIf, Matches } from 'class-validator';
 
-const contactChannels = ['PHONE', 'TELEGRAM', 'VK', 'MAX', 'WEBSITE'] as const;
+const contactChannels = ['PHONE', 'TELEGRAM', 'VK', 'WEBSITE'] as const;
 
 export class ContactClientDto {
   @IsIn(contactChannels)

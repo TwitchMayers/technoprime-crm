@@ -124,7 +124,7 @@ export class ClientsService {
   private contactHistoryCachePrefix(
     tenant: Tenant,
     clientId: number,
-    channel?: 'TELEGRAM' | 'VK' | 'MAX' | 'WEBSITE',
+    channel?: 'TELEGRAM' | 'VK' | 'WEBSITE',
   ) {
     return `${tenant}:${clientId}:${channel || 'all'}:`;
   }
@@ -132,7 +132,7 @@ export class ClientsService {
   private contactHistoryCacheKey(
     tenant: Tenant,
     clientId: number,
-    channel?: 'TELEGRAM' | 'VK' | 'MAX' | 'WEBSITE',
+    channel?: 'TELEGRAM' | 'VK' | 'WEBSITE',
     limit = 100,
     offset = 0,
   ) {
@@ -146,7 +146,7 @@ export class ClientsService {
   private invalidateContactHistoryCache(
     tenant: Tenant,
     clientId: number,
-    channel?: 'TELEGRAM' | 'VK' | 'MAX' | 'WEBSITE',
+    channel?: 'TELEGRAM' | 'VK' | 'WEBSITE',
   ) {
     const prefixes = channel
       ? [
@@ -429,11 +429,13 @@ export class ClientsService {
       },
     });
 
-    this.invalidateContactHistoryCache(
-      input.tenant,
-      input.clientId,
-      input.channel as 'TELEGRAM' | 'VK' | 'MAX' | 'WEBSITE',
-    );
+    const cacheChannel =
+      input.channel === CommunicationChannel.TELEGRAM ||
+      input.channel === CommunicationChannel.VK ||
+      input.channel === CommunicationChannel.WEBSITE
+        ? input.channel
+        : undefined;
+    this.invalidateContactHistoryCache(input.tenant, input.clientId, cacheChannel);
     if (input.channel === CommunicationChannel.WEBSITE) {
       this.invalidateWebsiteConversationsCache(input.tenant);
     }
@@ -651,9 +653,12 @@ export class ClientsService {
     accountPassword?: string;
     telegramId?: string;
     vkId?: string;
-    maxId?: string;
     marketingConsent?: boolean;
   }) {
+    if ('maxId' in (data as Record<string, unknown>)) {
+      throw new BadRequestException('MAX channel is disabled');
+    }
+
     const created = await this.prisma.client.create({
       data: {
         name: data.name,
@@ -666,7 +671,6 @@ export class ClientsService {
         accountPassword: data.accountPassword,
         telegramId: data.telegramId,
         vkId: data.vkId,
-        maxId: data.maxId,
         marketingConsent:
           data.marketingConsent !== undefined ? Boolean(data.marketingConsent) : undefined,
       },
@@ -736,10 +740,13 @@ export class ClientsService {
       accountPassword?: string;
       telegramId?: string | null;
       vkId?: string | null;
-      maxId?: string | null;
       marketingConsent?: boolean;
     },
   ) {
+    if ('maxId' in (data as Record<string, unknown>)) {
+      throw new BadRequestException('MAX channel is disabled');
+    }
+
     const updated = await this.prisma.client.update({
       where: { id },
       data,
@@ -915,7 +922,7 @@ export class ClientsService {
   async contact(
     id: number,
     input: {
-      channel: 'PHONE' | 'TELEGRAM' | 'VK' | 'MAX' | 'WEBSITE';
+      channel: 'PHONE' | 'TELEGRAM' | 'VK' | 'WEBSITE';
       text?: string;
       buttonText?: string;
       buttonUrl?: string;
@@ -929,7 +936,6 @@ export class ClientsService {
       | 'PHONE'
       | 'TELEGRAM'
       | 'VK'
-      | 'MAX'
       | 'WEBSITE';
     const attachments = this.normalizeContactAttachments(files);
 
@@ -975,25 +981,12 @@ export class ClientsService {
     }
 
     let targetId =
-      channel === 'TELEGRAM'
-        ? client.telegramId
-        : channel === 'VK'
-          ? client.vkId
-          : channel === 'MAX'
-            ? client.maxId
-            : null;
+      channel === 'TELEGRAM' ? client.telegramId : channel === 'VK' ? client.vkId : null;
 
     if (!targetId && channel !== 'WEBSITE') {
       const channelsByPhone = await this.resolveShopContactsByPhone([client.phone]);
       const merged = this.mergeClientWithShopChannels(client, channelsByPhone);
-      targetId =
-        channel === 'TELEGRAM'
-          ? merged.telegramId
-          : channel === 'VK'
-            ? merged.vkId
-            : channel === 'MAX'
-              ? merged.maxId
-              : null;
+      targetId = channel === 'TELEGRAM' ? merged.telegramId : channel === 'VK' ? merged.vkId : null;
 
       if (targetId) {
         await this.prisma.client
@@ -1002,7 +995,6 @@ export class ClientsService {
             data: {
               telegramId: merged.telegramId || undefined,
               vkId: merged.vkId || undefined,
-              maxId: merged.maxId || undefined,
             },
           })
           .catch(() => undefined);
@@ -1099,7 +1091,7 @@ export class ClientsService {
 
   async getContactHistory(
     id: number,
-    query: { channel?: 'TELEGRAM' | 'VK' | 'MAX' | 'WEBSITE'; limit?: number; offset?: number },
+    query: { channel?: 'TELEGRAM' | 'VK' | 'WEBSITE'; limit?: number; offset?: number },
     rawTenant?: Tenant | null,
   ) {
     const tenant = this.resolveTenant(rawTenant);

@@ -115,10 +115,8 @@ export class ShopCrmSyncService {
     const telegramUsername = this.normalizeText(input.telegramUsername);
     const hasTelegramId = input.telegramId !== undefined;
     const hasVkId = input.vkId !== undefined;
-    const hasMaxId = input.maxId !== undefined;
     const telegramId = hasTelegramId ? this.normalizeText(input.telegramId) : undefined;
     const vkId = hasVkId ? this.normalizeText(input.vkId) : undefined;
-    const maxId = hasMaxId ? this.normalizeText(input.maxId) : undefined;
     const hasMarketingConsent = input.marketingConsent !== undefined;
     const marketingConsent = hasMarketingConsent ? Boolean(input.marketingConsent) : undefined;
 
@@ -137,7 +135,6 @@ export class ShopCrmSyncService {
           address: address || existing.address || undefined,
           ...(hasTelegramId ? { telegramId } : {}),
           ...(hasVkId ? { vkId } : {}),
-          ...(hasMaxId ? { maxId } : {}),
           ...(hasMarketingConsent ? { marketingConsent } : {}),
           notes: nextNotes || undefined,
         },
@@ -164,7 +161,6 @@ export class ShopCrmSyncService {
         address: address || undefined,
         ...(hasTelegramId ? { telegramId } : {}),
         ...(hasVkId ? { vkId } : {}),
-        ...(hasMaxId ? { maxId } : {}),
         marketingConsent: hasMarketingConsent ? Boolean(marketingConsent) : false,
         notes: this.withTelegramTag(null, telegramUsername) || undefined,
       },

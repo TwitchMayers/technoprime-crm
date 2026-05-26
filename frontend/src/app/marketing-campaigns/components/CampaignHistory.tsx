@@ -8,7 +8,7 @@ import {
   Typography,
 } from '@mui/material';
 import { CopyPlus, Repeat2, Send } from 'lucide-react';
-import { CHANNEL_OPTIONS, MarketingCampaign } from '../types';
+import { CHANNEL_LABELS, MarketingCampaign } from '../types';
 
 const TP_TEXT_PRIMARY = '#e2e8f0';
 const TP_TEXT_SECONDARY = '#94a3b8';
@@ -128,7 +128,7 @@ export function CampaignHistory({
                     <Chip
                       key={`${campaign.id}-${channel}`}
                       size="small"
-                      label={CHANNEL_OPTIONS.find(item => item.value === channel)?.short || channel}
+                      label={CHANNEL_LABELS[channel]?.short || channel}
                       sx={{
                         bgcolor: 'rgba(14,165,233,0.16)',
                         border: '1px solid rgba(56,189,248,0.45)',

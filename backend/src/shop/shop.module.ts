@@ -19,8 +19,6 @@ import { ShopAccountService } from './shop-account.service';
 import { EventsModule } from '../events/events.module';
 import { ShopVkController } from './shop-vk.controller';
 import { ShopVkService } from './shop-vk.service';
-import { ShopMaxController } from './shop-max.controller';
-import { ShopMaxService } from './shop-max.service';
 import { CommunicationModule } from '../communication/communication.module';
 import { LogisticsModule } from '../logistics/logistics.module';
 
@@ -35,7 +33,6 @@ import { LogisticsModule } from '../logistics/logistics.module';
     ShopTelegramController,
     ShopAccountController,
     ShopVkController,
-    ShopMaxController,
   ],
   providers: [
     ShopProductsService,
@@ -46,7 +43,6 @@ import { LogisticsModule } from '../logistics/logistics.module';
     ShopCrmSyncService,
     ShopAccountService,
     ShopVkService,
-    ShopMaxService,
     ShopApiGuard,
     PrismaService,
   ],

@@ -1,4 +1,5 @@
 export type Channel = 'TELEGRAM' | 'VK' | 'MAX';
+export type ActiveChannel = Exclude<Channel, 'MAX'>;
 export type AudienceType = 'ALL' | 'ACTIVE_ORDERS' | 'SUBSCRIPTIONS' | 'REGISTERED_RANGE';
 
 export type CampaignAttachment = {
@@ -31,7 +32,7 @@ export type CampaignFormState = {
   buttonText: string;
   buttonUrl: string;
   files: File[];
-  channels: Channel[];
+  channels: ActiveChannel[];
   audienceType: AudienceType;
   registeredFrom: string;
   registeredTo: string;
@@ -48,10 +49,15 @@ export type ClientAudienceItem = {
   subscriptions?: unknown[];
 };
 
-export const CHANNEL_OPTIONS: Array<{ value: Channel; label: string; short: string }> = [
+export const CHANNEL_LABELS: Record<Channel, { label: string; short: string }> = {
+  TELEGRAM: { label: 'Telegram', short: 'TG' },
+  VK: { label: 'VK', short: 'VK' },
+  MAX: { label: 'MAX', short: 'MAX' },
+};
+
+export const CHANNEL_OPTIONS: Array<{ value: ActiveChannel; label: string; short: string }> = [
   { value: 'TELEGRAM', label: 'Telegram', short: 'TG' },
   { value: 'VK', label: 'VK', short: 'VK' },
-  { value: 'MAX', label: 'MAX', short: 'MAX' },
 ];
 
 export const AUDIENCE_OPTIONS: Array<{ value: AudienceType; label: string }> = [

@@ -508,7 +508,7 @@ export type ShopConsultationHistoryItem = {
   title?: string;
   text: string;
   sentAt: string;
-  channel?: 'WEBSITE' | 'TELEGRAM' | 'VK' | 'MAX';
+  channel?: 'WEBSITE' | 'TELEGRAM' | 'VK';
   status?: 'SENT' | 'FAILED';
   errorMessage?: string | null;
   createdBy?: { id: number; name: string } | null;

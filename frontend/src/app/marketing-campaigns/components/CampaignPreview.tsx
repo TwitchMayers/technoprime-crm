@@ -9,7 +9,7 @@ import {
   Typography,
 } from '@mui/material';
 import { Eye, Paperclip, Users } from 'lucide-react';
-import { AUDIENCE_OPTIONS, CampaignFormState, CHANNEL_OPTIONS } from '../types';
+import { ActiveChannel, AUDIENCE_OPTIONS, CampaignFormState, CHANNEL_LABELS } from '../types';
 
 const TP_TEXT_PRIMARY = '#e2e8f0';
 const TP_TEXT_SECONDARY = '#94a3b8';
@@ -17,7 +17,7 @@ const TP_TEXT_SECONDARY = '#94a3b8';
 type Props = {
   form: CampaignFormState;
   estimatedAudience: number;
-  channelEligibleCounts: Record<'TELEGRAM' | 'VK' | 'MAX', number>;
+  channelEligibleCounts: Record<ActiveChannel, number>;
 };
 
 export function CampaignPreview({ form, estimatedAudience, channelEligibleCounts }: Props) {
@@ -58,7 +58,7 @@ export function CampaignPreview({ form, estimatedAudience, channelEligibleCounts
                 >
                   <Chip
                     size="small"
-                    label={CHANNEL_OPTIONS.find(item => item.value === channel)?.short || channel}
+                    label={CHANNEL_LABELS[channel]?.short || channel}
                     sx={{
                       bgcolor: 'rgba(14,165,233,0.16)',
                       border: '1px solid rgba(56,189,248,0.45)',

@@ -12,9 +12,9 @@ import { CampaignHistory } from './components/CampaignHistory';
 import { CampaignPreview } from './components/CampaignPreview';
 import { CampaignStats } from './components/CampaignStats';
 import {
+  ActiveChannel,
   AudienceType,
   CampaignFormState,
-  Channel,
   ClientAudienceItem,
   initialCampaignForm,
   MarketingCampaign,
@@ -123,8 +123,7 @@ export default function MarketingCampaignsPage() {
     return {
       TELEGRAM: filteredAudience.filter(client => Boolean(client.telegramId)).length,
       VK: filteredAudience.filter(client => Boolean(client.vkId)).length,
-      MAX: filteredAudience.filter(client => Boolean(client.maxId)).length,
-    } as Record<Channel, number>;
+    } as Record<ActiveChannel, number>;
   }, [filteredAudience]);
 
   const estimatedAudience = useMemo(() => {
@@ -134,7 +133,7 @@ export default function MarketingCampaignsPage() {
       selectedChannels.some(channel => {
         if (channel === 'TELEGRAM') return Boolean(client.telegramId);
         if (channel === 'VK') return Boolean(client.vkId);
-        return Boolean(client.maxId);
+        return false;
       }),
     ).length;
   }, [filteredAudience, form.channels]);

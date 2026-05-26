@@ -23,11 +23,11 @@ type Props = {
   label?: string;
 };
 
-function channelLabel(channel?: 'WEBSITE' | 'TELEGRAM' | 'VK' | 'MAX') {
+function channelLabel(channel?: 'WEBSITE' | 'TELEGRAM' | 'VK' | string) {
   if (!channel || channel === 'WEBSITE') return 'Сайт';
   if (channel === 'TELEGRAM') return 'Telegram';
   if (channel === 'VK') return 'VK';
-  return 'MAX';
+  return 'Отключенный канал';
 }
 
 async function fetchAuthUser() {

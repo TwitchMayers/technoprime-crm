@@ -20,7 +20,7 @@ import {
   Typography,
 } from '@mui/material';
 import { Megaphone, Paperclip, Send, Trash2, Users } from 'lucide-react';
-import { AUDIENCE_OPTIONS, CampaignFormState, CHANNEL_OPTIONS } from '../types';
+import { ActiveChannel, AUDIENCE_OPTIONS, CampaignFormState, CHANNEL_OPTIONS } from '../types';
 
 const TP_TEXT_PRIMARY = '#e2e8f0';
 const TP_TEXT_SECONDARY = '#94a3b8';
@@ -29,7 +29,7 @@ type Props = {
   form: CampaignFormState;
   setForm: (updater: (prev: CampaignFormState) => CampaignFormState) => void;
   estimatedAudience: number;
-  channelEligibleCounts: Record<'TELEGRAM' | 'VK' | 'MAX', number>;
+  channelEligibleCounts: Record<ActiveChannel, number>;
   submitting: boolean;
   submitProgress: number;
   onCreateDraft: () => void;
@@ -38,7 +38,7 @@ type Props = {
 
 const steps = ['Аудитория', 'Каналы', 'Сообщение'];
 
-function channelTheme(channel: 'TELEGRAM' | 'VK' | 'MAX') {
+function channelTheme(channel: ActiveChannel) {
   if (channel === 'TELEGRAM') {
     return {
       bg: 'rgba(14,165,233,0.16)',
@@ -54,9 +54,9 @@ function channelTheme(channel: 'TELEGRAM' | 'VK' | 'MAX') {
     };
   }
   return {
-    bg: 'rgba(147,51,234,0.16)',
-    border: 'rgba(192,132,252,0.45)',
-    text: '#d8b4fe',
+    bg: 'rgba(37,99,235,0.16)',
+    border: 'rgba(96,165,250,0.45)',
+    text: '#93c5fd',
   };
 }
 
@@ -135,10 +135,10 @@ export function CampaignForm({
   const isStepCompleted = (i: number) => Boolean(completedSteps[i]) && i < activeStep;
   const isStepActive = (i: number) => i === activeStep;
 
-  const channelSelected = (channel: 'TELEGRAM' | 'VK' | 'MAX') =>
+  const channelSelected = (channel: ActiveChannel) =>
     form.channels.includes(channel);
 
-  const toggleChannel = (channel: 'TELEGRAM' | 'VK' | 'MAX') => {
+  const toggleChannel = (channel: ActiveChannel) => {
     setForm(prev => {
       const exists = prev.channels.includes(channel);
       const next = exists

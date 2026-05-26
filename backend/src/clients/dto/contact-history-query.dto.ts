@@ -1,7 +1,7 @@
 import { IsIn, IsInt, IsOptional, Max, Min } from 'class-validator';
 import { Type } from 'class-transformer';
 
-const communicationChannels = ['TELEGRAM', 'VK', 'MAX', 'WEBSITE'] as const;
+const communicationChannels = ['TELEGRAM', 'VK', 'WEBSITE'] as const;
 
 export class ContactHistoryQueryDto {
   @IsOptional()

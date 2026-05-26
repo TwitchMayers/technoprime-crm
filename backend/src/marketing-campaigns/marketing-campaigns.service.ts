@@ -45,6 +45,8 @@ type UploadFile = {
   buffer?: Buffer;
 };
 
+const ACTIVE_MARKETING_CHANNELS = [CommunicationChannel.TELEGRAM, CommunicationChannel.VK] as const;
+
 @Injectable()
 export class MarketingCampaignsService implements OnModuleInit {
   private readonly logger = new Logger(MarketingCampaignsService.name);
@@ -149,11 +151,7 @@ export class MarketingCampaignsService implements OnModuleInit {
   private sanitizeChannels(channels: unknown): CommunicationChannel[] {
     if (!Array.isArray(channels)) return [];
 
-    const allowed = new Set<CommunicationChannel>([
-      CommunicationChannel.TELEGRAM,
-      CommunicationChannel.VK,
-      CommunicationChannel.MAX,
-    ]);
+    const allowed = new Set<CommunicationChannel>(ACTIVE_MARKETING_CHANNELS);
 
     const normalized = channels
       .map(item => String(item || '').toUpperCase())
@@ -233,14 +231,13 @@ export class MarketingCampaignsService implements OnModuleInit {
     const andWhere: Prisma.ClientWhereInput[] = [{ marketingConsent: true }];
 
     const channelOr: Prisma.ClientWhereInput[] = [];
-    if (campaign.channels.includes(CommunicationChannel.TELEGRAM)) {
+    const channels = this.sanitizeChannels(campaign.channels);
+
+    if (channels.includes(CommunicationChannel.TELEGRAM)) {
       channelOr.push({ telegramId: { not: null } });
     }
-    if (campaign.channels.includes(CommunicationChannel.VK)) {
+    if (channels.includes(CommunicationChannel.VK)) {
       channelOr.push({ vkId: { not: null } });
-    }
-    if (campaign.channels.includes(CommunicationChannel.MAX)) {
-      channelOr.push({ maxId: { not: null } });
     }
     if (channelOr.length) {
       andWhere.push({ OR: channelOr });
@@ -293,7 +290,7 @@ export class MarketingCampaignsService implements OnModuleInit {
   ): string | null {
     if (channel === CommunicationChannel.TELEGRAM) return client.telegramId || null;
     if (channel === CommunicationChannel.VK) return client.vkId || null;
-    return client.maxId || null;
+    return null;
   }
 
   private enqueueCampaign(campaignId: number) {
@@ -327,7 +324,7 @@ export class MarketingCampaignsService implements OnModuleInit {
     const campaign = await this.prisma.marketingCampaign.findUnique({ where: { id: campaignId } });
     if (!campaign) return;
 
-    const channels = campaign.channels || [];
+    const channels = this.sanitizeChannels(campaign.channels);
     if (!channels.length) {
       await this.prisma.marketingCampaign.update({
         where: { id: campaignId },
@@ -573,13 +570,18 @@ export class MarketingCampaignsService implements OnModuleInit {
       throw new NotFoundException('Campaign not found');
     }
 
+    const channels = this.sanitizeChannels(campaign.channels);
+    if (!channels.length) {
+      throw new BadRequestException('В исходной кампании нет активных каналов для копирования');
+    }
+
     const duplicate = await this.prisma.marketingCampaign.create({
       data: {
         tenant,
         title: `${campaign.title} (копия)`,
         message: campaign.message,
         attachments: campaign.attachments ?? undefined,
-        channels: campaign.channels,
+        channels,
         audienceType: campaign.audienceType,
         registeredFrom: campaign.registeredFrom,
         registeredTo: campaign.registeredTo,

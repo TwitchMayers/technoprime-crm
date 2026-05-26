@@ -313,68 +313,17 @@ export class CommunicationService {
     }
   }
 
-  async sendMaxMessage(
+  sendMaxMessage(
     userId: string,
     text: string,
     attachments: CommunicationAttachment[] = [],
     options: CommunicationSendOptions = {},
   ): Promise<CommunicationSendResult> {
-    const id = String(userId || '').trim();
-    if (!id) {
-      return { success: false, error: 'MAX id is empty' };
-    }
-
-    const webhookUrl = String(
-      process.env.CRM_MAX_WEBHOOK_URL || process.env.MAX_WEBHOOK_URL || '',
-    ).trim();
-
-    if (!webhookUrl) {
-      return {
-        success: false,
-        error: 'MAX integration is not configured (CRM_MAX_WEBHOOK_URL)',
-      };
-    }
-
-    const message = this.composePlainMessage(text, options);
-    if (!message) {
-      return { success: false, error: 'Message text is empty' };
-    }
-
-    const attachmentMeta = attachments.map(file => ({
-      fileName: file.fileName,
-      mimeType: file.mimeType || null,
-      size: file.size || null,
-      path: file.path || null,
-    }));
-
-    try {
-      const res = await fetch(webhookUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          targetId: id,
-          message,
-          title: options.title || null,
-          buttonText: options.buttonText || null,
-          buttonUrl: options.buttonUrl || null,
-          attachments: attachmentMeta,
-        }),
-      });
-
-      if (!res.ok) {
-        const raw = await res.text().catch(() => '');
-        return {
-          success: false,
-          error: `MAX webhook HTTP ${res.status}: ${raw.slice(0, 200)}`,
-        };
-      }
-
-      return { success: true };
-    } catch (error) {
-      const err = `MAX request failed: ${String(error)}`;
-      this.logger.warn(err);
-      return { success: false, error: err };
-    }
+    void userId;
+    void text;
+    void attachments;
+    void options;
+    return Promise.resolve({ success: false, error: 'MAX channel is disabled' });
   }
 
   async sendByChannel(
@@ -389,7 +338,7 @@ export class CommunicationService {
     if (channel === 'WEBSITE') {
       return { success: true };
     }
-    return this.sendMaxMessage(userId, text, attachments, options);
+    return { success: false, error: 'MAX channel is disabled' };
   }
 
   private buildTelegramReplyMarkup(options: CommunicationSendOptions) {
@@ -573,19 +522,5 @@ export class CommunicationService {
     const message = parts.join('\n\n').trim();
     if (!message) return '';
     return message.slice(0, CommunicationService.VK_MESSAGE_TEXT_LIMIT);
-  }
-
-  private composePlainMessage(text: string, options: CommunicationSendOptions = {}) {
-    const normalizedTitle = String(options.title || '').trim();
-    const normalizedText = String(text || '').trim();
-    const buttonText = String(options.buttonText || '').trim();
-    const buttonUrl = String(options.buttonUrl || '').trim();
-
-    const parts = [normalizedTitle, normalizedText].filter(Boolean);
-    if (buttonText && buttonUrl) {
-      parts.push(`${buttonText}: ${buttonUrl}`);
-    }
-
-    return parts.join('\n\n').slice(0, 3900);
   }
 }
