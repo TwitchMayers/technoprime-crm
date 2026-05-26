@@ -40,3 +40,7 @@ backend/prisma/migrations/**/steps.json
 .npmrc
 shop/shop/
 legacy/scripts/dump_before_reset.sql
+docs/code-audit-*.md
+legacy/
+assets/uploads/
+assets/brand/inbox/
