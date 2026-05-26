@@ -4,6 +4,8 @@ build
 coverage
 logs
 *.log
+lint-report.json
+**/lint-report.json
 .DS_Store
 **/.DS_Store
 tsconfig.tsbuildinfo
