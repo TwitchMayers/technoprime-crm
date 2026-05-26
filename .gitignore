@@ -1,14 +1,22 @@
 node_modules
 dist
+build
 coverage
 logs
 *.log
 .DS_Store
+**/.DS_Store
+tsconfig.tsbuildinfo
+*.tsbuildinfo
 .idea
 .vscode
+postgres-data/
+**/postgres-data/
 
 # Next.js
 .next
+.next.bak*
+**/.next.bak*
 out
 .turbo
 
