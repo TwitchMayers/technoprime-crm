@@ -26,26 +26,68 @@ import {
   User,
   Clock,
   Copy,
-  ExternalLink,
   Eye,
   EyeOff,
   Calendar,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { motion, AnimatePresence } from 'framer-motion';
-import Link from 'next/link';
 import { fetchWithAuth } from '@/lib/fetchWithAuth';
 import { formatPhoneNumber, cleanPhoneNumber, isValidPhone } from '@/lib/phoneUtils';
-import type { Client, ClientOrder } from '@/types/client';
+import type { Client, ClientOrder, Subscription as ClientSubscription } from '@/types/client';
+import { useAuth } from '@/contexts/AuthContext';
+import MobilePageHeader from '@/components/MobilePageHeader';
 
 // ===== УТИЛИТЫ =====
 
 const getActiveSubscription = (client: Client) => {
-  return client.subscriptions?.find((s) => s.status === 'ACTIVE') || null;
+  const active = client.subscriptions?.filter((s) => s.status === 'ACTIVE') || [];
+  if (!active.length) return null;
+
+  return active.sort(
+    (left, right) =>
+      getSubscriptionEffectiveEndTime(right) - getSubscriptionEffectiveEndTime(left),
+  )[0] || null;
 };
 
-const daysLeft = (endDate: string): string => {
+const parseDateTime = (value?: string | null) => {
+  if (!value) return null;
+  const time = new Date(value).getTime();
+  return Number.isFinite(time) ? time : null;
+};
+
+const getSubscriptionEffectiveEndTime = (sub: ClientSubscription | null) => {
+  if (!sub) return 0;
+
+  const candidates =
+    sub.accountType === 'SHARING_CLIENT'
+      ? [
+          sub.endDate,
+          sub.clientSlot?.endDate,
+          sub.clientSlot?.sharingSystem?.donor?.endDate && !sub.clientSlot?.endDate
+            ? sub.clientSlot.sharingSystem.donor.endDate
+            : null,
+          sub.donorAccount?.endDate && !sub.clientSlot?.endDate ? sub.donorAccount.endDate : null,
+        ]
+      : sub.accountType === 'SHARING_DONOR'
+        ? [
+            sub.endDate,
+            sub.donorAccount?.endDate,
+            sub.clientSlot?.sharingSystem?.donor?.endDate,
+          ]
+        : [sub.endDate];
+
+  return Math.max(0, ...candidates.map(parseDateTime).filter((time): time is number => time !== null));
+};
+
+const getSubscriptionEffectiveEndDate = (sub: ClientSubscription | null) => {
+  const time = getSubscriptionEffectiveEndTime(sub);
+  return time > 0 ? new Date(time).toISOString() : null;
+};
+
+const daysLeft = (endDate?: string | null): string => {
   try {
+    if (!endDate) return 'Ошибка';
     const end = new Date(endDate);
     const now = new Date();
     const diff = Math.ceil((end.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
@@ -57,8 +99,9 @@ const daysLeft = (endDate: string): string => {
   }
 };
 
-const getStatusColor = (endDate: string): string => {
+const getStatusColor = (endDate?: string | null): string => {
   try {
+    if (!endDate) return 'text-slate-400 bg-slate-500/20 border-slate-500/30';
     const end = new Date(endDate);
     const now = new Date();
     const diff = Math.ceil((end.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
@@ -69,6 +112,52 @@ const getStatusColor = (endDate: string): string => {
   } catch {
     return 'text-slate-400 bg-slate-500/20 border-slate-500/30';
   }
+};
+
+const getSubscriptionTypeLabel = (type?: string) => {
+  switch (type) {
+    case 'PS_PLUS':
+      return 'PlayStation Plus';
+    case 'GAME_PASS':
+      return 'Xbox Game Pass';
+    case 'EA_PLAY':
+      return 'EA Play';
+    default:
+      return type || '—';
+  }
+};
+
+const getSubscriptionAccountFields = (client: Client, sub: ClientSubscription | null) => {
+  if (!sub) return [] as Array<{ label: string; value: string }>;
+
+  const source =
+    sub.accountType === 'SHARING_CLIENT'
+      ? {
+          emailLogin: sub.clientSlot?.emailLogin,
+          emailPassword: sub.clientSlot?.emailPassword,
+          accountPassword: sub.clientSlot?.accountPassword,
+        }
+      : sub.accountType === 'PERSONAL'
+        ? {
+            emailLogin: client.emailLogin,
+            emailPassword: client.emailPassword,
+            accountPassword: client.accountPassword,
+          }
+        : null;
+
+  if (!source) return [];
+
+  return [
+    source.emailLogin ? { label: 'Логин', value: source.emailLogin } : null,
+    source.emailPassword ? { label: 'Пароль почты', value: source.emailPassword } : null,
+    source.accountPassword ? { label: 'Пароль профиля', value: source.accountPassword } : null,
+  ].filter(Boolean) as Array<{ label: string; value: string }>;
+};
+
+const getSubscriptionAccountTitle = (accountType?: string) => {
+  if (accountType === 'SHARING_CLIENT') return 'Данные подключенного аккаунта';
+  if (accountType === 'PERSONAL') return 'Данные аккаунта';
+  return 'Данные доступа';
 };
 
 const matchesSearch = (client: Client, query: string): boolean => {
@@ -89,12 +178,20 @@ interface ClientCardProps {
   isExpanded: boolean;
   onToggle: (id: number) => void;
   onEdit: (client: Client) => void;
-  onDelete: (id: number) => void;
+  onRequestDelete: (client: Client) => void;
 }
 
-function ClientCard({ client, isExpanded, onToggle, onEdit, onDelete }: ClientCardProps) {
+function ClientCard({
+  client,
+  isExpanded,
+  onToggle,
+  onEdit,
+  onRequestDelete,
+}: ClientCardProps) {
   const sub = getActiveSubscription(client);
-  const [deleteConfirm, setDeleteConfirm] = useState(false);
+  const effectiveEndDate = getSubscriptionEffectiveEndDate(sub);
+  const isExpired = Boolean(effectiveEndDate && new Date(effectiveEndDate) < new Date());
+  const subscriptionAccountFields = sub ? getSubscriptionAccountFields(client, sub) : [];
 
   return (
     <motion.div
@@ -150,10 +247,10 @@ function ClientCard({ client, isExpanded, onToggle, onEdit, onDelete }: ClientCa
               <div className="flex flex-col items-end gap-1">
                 <span
                   className={`px-3 py-1 rounded-full text-xs font-bold border inline-block ${getStatusColor(
-                    sub.endDate
+                    effectiveEndDate
                   )}`}
                 >
-                  {daysLeft(sub.endDate)}
+                  {daysLeft(effectiveEndDate)}
                 </span>
                 <span
                   className={`text-xs font-semibold flex items-center gap-1 ${
@@ -254,11 +351,7 @@ function ClientCard({ client, isExpanded, onToggle, onEdit, onDelete }: ClientCa
                       <div>
                         <div className="text-xs text-slate-400 mb-1">Тип:</div>
                         <div className="text-sm font-bold text-white">
-                          {sub.type === 'PS_PLUS'
-                            ? 'PlayStation Plus'
-                            : sub.type === 'GAME_PASS'
-                              ? 'Xbox Game Pass'
-                              : 'EA Play'}
+                          {getSubscriptionTypeLabel(sub.type)}
                         </div>
                       </div>
                       <div>
@@ -279,32 +372,64 @@ function ClientCard({ client, isExpanded, onToggle, onEdit, onDelete }: ClientCa
                       <div>
                         <div className="text-xs text-slate-400 mb-1">Конец подписки:</div>
                         <div className="text-sm font-bold text-white">
-                          {new Date(sub.endDate).toLocaleDateString('ru', {
-                            day: 'numeric',
-                            month: 'long',
-                            year: 'numeric',
-                          })}
+                          {effectiveEndDate
+                            ? new Date(effectiveEndDate).toLocaleDateString('ru', {
+                                day: 'numeric',
+                                month: 'long',
+                                year: 'numeric',
+                              })
+                            : '—'}
                         </div>
                       </div>
                       <div>
                         <div className="text-xs text-slate-400 mb-1">Осталось:</div>
                         <div
                           className={`text-sm font-bold ${
-                            new Date(sub.endDate) < new Date()
+                            isExpired
                               ? 'text-rose-400'
                               : 'text-emerald-400'
                           }`}
                         >
-                          {daysLeft(sub.endDate)}
+                          {daysLeft(effectiveEndDate)}
                         </div>
                       </div>
                     </div>
 
-                    {sub.sharingSystem && (
+                    {sub.clientSlot?.sharingSystem && (
                       <div className="p-2 rounded-lg bg-slate-800/50 border border-slate-700/50">
                         <div className="text-xs text-slate-400 mb-1">Система шеринга:</div>
                         <div className="text-sm font-medium text-cyan-400">
-                          {sub.sharingSystem.name}
+                          {sub.clientSlot.sharingSystem.name}
+                        </div>
+                      </div>
+                    )}
+
+                    {subscriptionAccountFields.length > 0 && (
+                      <div className="p-3 rounded-xl bg-slate-800/50 border border-slate-700/50 space-y-3">
+                        <div className="text-xs text-slate-400">
+                          {getSubscriptionAccountTitle(sub.accountType)}
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                          {subscriptionAccountFields.map(field => (
+                            <div
+                              key={field.label}
+                              className="rounded-xl border border-slate-700/50 bg-slate-900/40 p-3 space-y-1"
+                            >
+                              <div className="text-xs text-slate-400">{field.label}:</div>
+                              <div className="text-sm font-mono text-cyan-300 break-all flex items-center gap-2">
+                                <span className="min-w-0 flex-1">{field.value}</span>
+                                <button
+                                  onClick={() => {
+                                    navigator.clipboard.writeText(field.value);
+                                    toast.success('Скопировано');
+                                  }}
+                                  className="p-1 rounded hover:bg-slate-700 transition flex-shrink-0"
+                                >
+                                  <Copy className="w-3 h-3" />
+                                </button>
+                              </div>
+                            </div>
+                          ))}
                         </div>
                       </div>
                     )}
@@ -333,34 +458,16 @@ function ClientCard({ client, isExpanded, onToggle, onEdit, onDelete }: ClientCa
               )}
 
               {/* ADDITIONAL INFO */}
-              {(client.address || client.emailLogin) && (
+              {client.address && (
                 <div className="space-y-3 pt-4 border-t border-slate-700/30">
                   <h4 className="text-sm font-bold text-slate-300">Дополнительно</h4>
 
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <div className="grid grid-cols-1 gap-3">
                     {client.address && (
                       <div className="p-3 rounded-xl bg-slate-800/50 border border-slate-700/50 space-y-1">
                         <div className="text-xs text-slate-400">Адрес:</div>
                         <div className="text-sm font-medium text-white">
                           {client.address}
-                        </div>
-                      </div>
-                    )}
-
-                    {client.emailLogin && (
-                      <div className="p-3 rounded-xl bg-slate-800/50 border border-slate-700/50 space-y-1">
-                        <div className="text-xs text-slate-400">Email логин:</div>
-                        <div className="text-sm font-mono text-cyan-400 flex items-center gap-2">
-                          {client.emailLogin}
-                          <button
-                            onClick={() => {
-                              navigator.clipboard.writeText(client.emailLogin || '');
-                              toast.success('Скопирован');
-                            }}
-                            className="p-1 rounded hover:bg-slate-700 transition"
-                          >
-                            <Copy className="w-3 h-3" />
-                          </button>
                         </div>
                       </div>
                     )}
@@ -376,6 +483,7 @@ function ClientCard({ client, isExpanded, onToggle, onEdit, onDelete }: ClientCa
       <motion.div className="p-4 border-t border-slate-700/50 bg-slate-800/20 flex items-center gap-2">
         <a
           href={`tel:${client.phone}`}
+          onClick={(e) => e.stopPropagation()}
           className="flex-1 flex items-center justify-center gap-2 px-3 py-2.5 rounded-lg bg-cyan-600/20 hover:bg-cyan-600/30 border border-cyan-500/30 text-cyan-400 text-sm font-semibold transition"
         >
           <Phone className="w-4 h-4" />
@@ -385,7 +493,10 @@ function ClientCard({ client, isExpanded, onToggle, onEdit, onDelete }: ClientCa
         <motion.button
           whileHover={{ scale: 1.05 }}
           whileTap={{ scale: 0.95 }}
-          onClick={() => onEdit(client)}
+          onClick={(e) => {
+            e.stopPropagation();
+            onEdit(client);
+          }}
           className="flex-1 px-3 py-2.5 rounded-lg bg-slate-700/50 hover:bg-slate-600/50 text-slate-300 text-sm font-semibold transition"
         >
           <Edit className="w-4 h-4 inline mr-1" />
@@ -395,58 +506,16 @@ function ClientCard({ client, isExpanded, onToggle, onEdit, onDelete }: ClientCa
         <motion.button
           whileHover={{ scale: 1.05 }}
           whileTap={{ scale: 0.95 }}
-          onClick={() => setDeleteConfirm(true)}
+          onClick={(e) => {
+            e.stopPropagation();
+            onRequestDelete(client);
+          }}
           className="flex-1 px-3 py-2.5 rounded-lg bg-rose-500/20 hover:bg-rose-500/30 border border-rose-500/30 text-rose-400 text-sm font-semibold transition"
         >
           <Trash className="w-4 h-4 inline mr-1" />
           Удалить
         </motion.button>
       </motion.div>
-
-      {/* DELETE CONFIRM */}
-      <AnimatePresence>
-        {deleteConfirm && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm"
-            onClick={() => setDeleteConfirm(false)}
-          >
-            <motion.div
-              initial={{ scale: 0.9, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.9, opacity: 0 }}
-              onClick={(e) => e.stopPropagation()}
-              className="glass rounded-2xl p-6 max-w-sm border border-slate-700/50"
-            >
-              <h3 className="text-lg font-bold text-white mb-2">
-                Удалить клиента?
-              </h3>
-              <p className="text-sm text-slate-400 mb-6">
-                Это действие необратимо. Все связанные данные будут удалены.
-              </p>
-              <div className="flex gap-3">
-                <button
-                  onClick={() => setDeleteConfirm(false)}
-                  className="flex-1 px-4 py-2.5 rounded-lg bg-slate-800/50 hover:bg-slate-700/50 border border-slate-700 text-slate-300 font-semibold transition"
-                >
-                  Отмена
-                </button>
-                <button
-                  onClick={() => {
-                    onDelete(client.id);
-                    setDeleteConfirm(false);
-                  }}
-                  className="flex-1 px-4 py-2.5 rounded-lg bg-rose-600 hover:bg-rose-500 text-white font-semibold transition"
-                >
-                  Удалить
-                </button>
-              </div>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
     </motion.div>
   );
 }
@@ -537,14 +606,14 @@ function OrderCard({ order }: { order: ClientOrder }) {
                   </div>
                 </div>
               )}
-              {order.manager && (
+              {order.completedBy && (
                 <div className="p-2 rounded-lg bg-slate-800/50 border border-slate-700/50 space-y-1">
                   <div className="text-xs text-slate-400 flex items-center gap-1">
                     <Clock className="w-3 h-3" />
                     Закрыл:
                   </div>
                   <div className="text-sm font-semibold text-white">
-                    {order.manager.name}
+                    {order.completedBy?.name}
                   </div>
                 </div>
               )}
@@ -630,12 +699,15 @@ function OrderCard({ order }: { order: ClientOrder }) {
 // ===== MAIN PAGE =====
 
 export default function ClientsPage() {
+  const { user } = useAuth();
   const [clients, setClients] = useState<Client[]>([]);
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<'all' | 'with_subscription' | 'without_subscription' | 'expired'>('all');
   const [modalOpen, setModalOpen] = useState(false);
   const [editingClient, setEditingClient] = useState<Client | null>(null);
+  const [clientToDelete, setClientToDelete] = useState<Client | null>(null);
+  const [deletingClientId, setDeletingClientId] = useState<number | null>(null);
   const [uploading, setUploading] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [expandedCards, setExpandedCards] = useState<Set<number>>(new Set());
@@ -665,7 +737,8 @@ export default function ClientsPage() {
     return clients.filter((client) => {
       const hasSubscription = getActiveSubscription(client) !== null;
       const sub = getActiveSubscription(client);
-      const isExpired = sub && new Date(sub.endDate) < new Date();
+      const effectiveEndDate = getSubscriptionEffectiveEndDate(sub);
+      const isExpired = Boolean(effectiveEndDate && new Date(effectiveEndDate) < new Date());
 
       if (filter === 'with_subscription') return hasSubscription && !isExpired;
       if (filter === 'without_subscription') return !hasSubscription;
@@ -679,7 +752,8 @@ export default function ClientsPage() {
     const withSub = clients.filter((c) => getActiveSubscription(c) !== null).length;
     const expired = clients.filter((c) => {
       const sub = getActiveSubscription(c);
-      return sub && new Date(sub.endDate) < new Date();
+      const effectiveEndDate = getSubscriptionEffectiveEndDate(sub);
+      return Boolean(effectiveEndDate && new Date(effectiveEndDate) < new Date());
     }).length;
 
     const totalRevenue = clients.reduce((acc, c) => {
@@ -709,13 +783,68 @@ export default function ClientsPage() {
     };
   }, [clients]);
 
+  const canSeeFinancialStats = user?.role === 'ADMIN' || user?.role === 'SUPER_ADMIN';
+
+  const statsCards = [
+    {
+      value: stats.total,
+      label: 'Всего',
+      icon: Users,
+      color: 'cyan',
+      suffix: '',
+    },
+    {
+      value: stats.withSubscription,
+      label: 'С подпиской',
+      icon: CheckCircle,
+      color: 'green',
+      suffix: '',
+    },
+    {
+      value: stats.withoutSubscription,
+      label: 'Без подписки',
+      icon: AlertCircle,
+      color: 'amber',
+      suffix: '',
+    },
+    {
+      value: stats.expiredSubscriptions,
+      label: 'Истекшие',
+      icon: AlertTriangle,
+      color: 'rose',
+      suffix: '',
+    },
+    ...(canSeeFinancialStats
+      ? [
+          {
+            value: `${(stats.totalRevenue / 1000000).toFixed(1)}M`,
+            label: 'Доход',
+            icon: TrendingUp,
+            color: 'purple',
+            suffix: '₽',
+          },
+          {
+            value: stats.avgOrderValue.toLocaleString(),
+            label: 'Средний заказ',
+            icon: DollarSign,
+            color: 'indigo',
+            suffix: '₽',
+          },
+        ]
+      : []),
+  ];
+
   const handleDelete = async (id: number) => {
+    setDeletingClientId(id);
     try {
       await fetchWithAuth(`/api/clients/${id}`, { method: 'DELETE' });
       toast.success('Клиент удален');
-      loadClients();
+      setClientToDelete(null);
+      await loadClients();
     } catch (error: any) {
       toast.error(`Ошибка: ${error.message}`);
+    } finally {
+      setDeletingClientId(null);
     }
   };
 
@@ -932,6 +1061,7 @@ export default function ClientsPage() {
 
       const rows = clients.map((client) => {
         const sub = getActiveSubscription(client);
+        const effectiveEndDate = getSubscriptionEffectiveEndDate(sub);
         return [
           client.id,
           client.name,
@@ -943,8 +1073,8 @@ export default function ClientsPage() {
           client.emailPassword || '',
           client.accountPassword || '',
           sub?.type || 'Нет',
-          sub?.endDate ? new Date(sub.endDate).toLocaleDateString('ru') : '',
-          sub?.sharingSystem?.name || '',
+          effectiveEndDate ? new Date(effectiveEndDate).toLocaleDateString('ru') : '',
+          sub?.clientSlot?.sharingSystem?.name || '',
           client.createdAt ? new Date(client.createdAt).toLocaleDateString('ru') : '',
         ];
       });
@@ -1005,23 +1135,29 @@ export default function ClientsPage() {
   };
 
   return (
-    <div className="space-y-8 pb-12">
+    <div className="mobile-page-shell md:space-y-8 md:pb-12">
+      <MobilePageHeader
+        title="Клиенты"
+        subtitle={`${filteredClients.length} в текущей выборке`}
+        sticky={false}
+      />
+
       {/* HEADER */}
       <motion.div
         initial={{ opacity: 0, y: -20 }}
         animate={{ opacity: 1, y: 0 }}
-        className="flex flex-col md:flex-row md:items-center justify-between gap-6"
+        className="flex flex-col justify-between gap-3 rounded-2xl border border-slate-700/60 bg-slate-900/35 p-3 md:flex-row md:items-center md:gap-6 md:border-0 md:bg-transparent md:p-0"
       >
-        <div>
-          <h1 className="text-4xl md:text-5xl font-bold bg-gradient-to-r from-cyan-400 via-blue-500 to-purple-600 bg-clip-text text-transparent">
+        <div className="hidden md:block">
+          <h1 className="bg-gradient-to-r from-cyan-400 via-blue-500 to-purple-600 bg-clip-text text-4xl font-bold text-transparent md:text-5xl">
             Клиенты
           </h1>
-          <p className="text-slate-400 mt-2 text-lg">
+          <p className="mt-2 text-lg text-slate-400">
             Полное управление клиентской базой и историей покупок
           </p>
         </div>
 
-        <div className="flex gap-2 flex-wrap">
+        <div className="mobile-action-grid md:flex md:flex-wrap md:gap-2">
           <motion.button
             whileHover={{ scale: 1.05 }}
             whileTap={{ scale: 0.95 }}
@@ -1029,7 +1165,7 @@ export default function ClientsPage() {
               setEditingClient(null);
               setModalOpen(true);
             }}
-            className="flex items-center gap-2 px-6 py-3 rounded-lg bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white font-bold shadow-lg shadow-cyan-500/30 transition-all"
+            className="flex items-center gap-2 rounded-2xl bg-gradient-to-r from-cyan-600 to-blue-600 px-4 py-3 font-bold text-white shadow-lg shadow-cyan-500/25 transition-all hover:from-cyan-500 hover:to-blue-500 md:rounded-lg md:px-6"
           >
             <Plus className="w-5 h-5" />
             Добавить клиента
@@ -1041,7 +1177,7 @@ export default function ClientsPage() {
     whileHover={{ scale: 1.05 }}
     whileTap={{ scale: 0.95 }}
     disabled={exporting}
-    className="flex items-center gap-2 px-6 py-3 rounded-lg bg-slate-800/50 hover:bg-slate-700/50 border border-slate-700 text-slate-300 font-bold transition-all disabled:opacity-50"
+    className="flex items-center gap-2 rounded-2xl border border-slate-700 bg-slate-800/50 px-4 py-3 font-bold text-slate-300 transition-all hover:bg-slate-700/50 disabled:opacity-50 md:rounded-lg md:px-6"
   >
     <Download className="w-5 h-5" />
     Экспорт
@@ -1073,7 +1209,7 @@ export default function ClientsPage() {
             whileTap={{ scale: 0.95 }}
             onClick={() => fileInputRef.current?.click()}
             disabled={uploading}
-            className="flex items-center gap-2 px-6 py-3 rounded-lg bg-slate-800/50 hover:bg-slate-700/50 border border-slate-700 text-slate-300 font-bold transition-all disabled:opacity-50"
+            className="flex items-center gap-2 rounded-2xl border border-slate-700 bg-slate-800/50 px-4 py-3 font-bold text-slate-300 transition-all hover:bg-slate-700/50 disabled:opacity-50 md:rounded-lg md:px-6"
           >
             <Upload className="w-5 h-5" />
             Импорт
@@ -1093,7 +1229,7 @@ export default function ClientsPage() {
             whileTap={{ scale: 0.95 }}
             onClick={loadClients}
             disabled={loading}
-            className="flex items-center gap-2 px-6 py-3 rounded-lg bg-slate-800/50 hover:bg-slate-700/50 border border-slate-700 text-slate-300 font-bold transition-all disabled:opacity-50"
+            className="flex items-center gap-2 rounded-2xl border border-slate-700 bg-slate-800/50 px-4 py-3 font-bold text-slate-300 transition-all hover:bg-slate-700/50 disabled:opacity-50 md:rounded-lg md:px-6"
           >
             <RefreshCw className={`w-5 h-5 ${loading ? 'animate-spin' : ''}`} />
           </motion.button>
@@ -1105,52 +1241,11 @@ export default function ClientsPage() {
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.1 }}
-        className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-4"
+        className={`grid grid-cols-2 gap-2.5 md:gap-4 ${
+          canSeeFinancialStats ? 'lg:grid-cols-6' : 'lg:grid-cols-4'
+        }`}
       >
-        {[
-          {
-            value: stats.total,
-            label: 'Всего',
-            icon: Users,
-            color: 'cyan',
-            suffix: '',
-          },
-          {
-            value: stats.withSubscription,
-            label: 'С подпиской',
-            icon: CheckCircle,
-            color: 'green',
-            suffix: '',
-          },
-          {
-            value: stats.withoutSubscription,
-            label: 'Без подписки',
-            icon: AlertCircle,
-            color: 'amber',
-            suffix: '',
-          },
-          {
-            value: stats.expiredSubscriptions,
-            label: 'Истекшие',
-            icon: AlertTriangle,
-            color: 'rose',
-            suffix: '',
-          },
-          {
-            value: `${(stats.totalRevenue / 1000000).toFixed(1)}M`,
-            label: 'Доход',
-            icon: TrendingUp,
-            color: 'purple',
-            suffix: '₽',
-          },
-          {
-            value: stats.avgOrderValue.toLocaleString(),
-            label: 'Средний заказ',
-            icon: DollarSign,
-            color: 'indigo',
-            suffix: '₽',
-          },
-        ].map((stat, idx) => {
+        {statsCards.map((stat, idx) => {
           const Icon = stat.icon;
           const colorMap: any = {
             cyan: 'from-cyan-500/20 to-cyan-500/10 border-cyan-500/30 text-cyan-400',
@@ -1167,20 +1262,20 @@ export default function ClientsPage() {
               initial={{ opacity: 0, scale: 0.9 }}
               animate={{ opacity: 1, scale: 1 }}
               transition={{ delay: idx * 0.05 }}
-              className={`glass rounded-2xl p-5 border bg-gradient-to-br ${colorMap[stat.color]} group hover:shadow-lg transition`}
+              className={`glass group rounded-2xl border bg-gradient-to-br ${colorMap[stat.color]} p-3 transition hover:shadow-lg sm:p-5`}
               whileHover={{ y: -4 }}
             >
               <div className="flex items-center justify-between">
                 <div>
-                  <div className="text-2xl lg:text-3xl font-bold text-white">
+                  <div className="text-xl font-bold text-white sm:text-2xl lg:text-3xl">
                     {stat.value}
                     {stat.suffix && (
                       <span className="text-sm ml-1">{stat.suffix}</span>
                     )}
                   </div>
-                  <div className="text-xs text-slate-400 mt-1.5">{stat.label}</div>
+                  <div className="mt-1.5 text-[11px] leading-4 text-slate-400 sm:text-xs">{stat.label}</div>
                 </div>
-                <Icon className={`w-8 h-8 opacity-20 group-hover:opacity-30 transition`} />
+                <Icon className="h-6 w-6 opacity-20 transition group-hover:opacity-30 sm:h-8 sm:w-8" />
               </div>
             </motion.div>
           );
@@ -1192,7 +1287,7 @@ export default function ClientsPage() {
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.2 }}
-        className="glass rounded-2xl p-6 space-y-4 border border-slate-700/50"
+        className="glass space-y-3 rounded-2xl border border-slate-700/50 p-3 sm:p-5 md:space-y-4 md:p-6"
       >
         {/* SEARCH */}
         <div className="relative">
@@ -1207,7 +1302,7 @@ export default function ClientsPage() {
         </div>
 
         {/* FILTERS */}
-        <div className="flex gap-3 overflow-x-auto pb-2">
+        <div className="mobile-scroll-row md:mx-0 md:flex md:gap-3 md:overflow-x-auto md:px-0 md:pb-2">
           {[
             { key: 'all', label: 'Все', icon: Users },
             { key: 'with_subscription', label: 'С подпиской', icon: CheckCircle },
@@ -1219,7 +1314,7 @@ export default function ClientsPage() {
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
               onClick={() => setFilter(key as any)}
-              className={`flex items-center gap-2 px-5 py-2.5 rounded-lg transition-all whitespace-nowrap font-semibold text-sm ${
+              className={`flex min-h-10 items-center gap-2 whitespace-nowrap rounded-xl px-4 py-2.5 text-sm font-semibold transition-all md:rounded-lg md:px-5 ${
                 filter === key
                   ? 'bg-gradient-to-r from-cyan-600 to-blue-600 text-white shadow-lg shadow-cyan-500/30'
                   : 'bg-slate-800/50 text-slate-300 hover:bg-slate-700/50 border border-slate-700'
@@ -1287,7 +1382,7 @@ export default function ClientsPage() {
                   setEditingClient(c);
                   setModalOpen(true);
                 }}
-                onDelete={handleDelete}
+                onRequestDelete={setClientToDelete}
               />
             ))}
           </AnimatePresence>
@@ -1310,6 +1405,58 @@ export default function ClientsPage() {
               loadClients();
             }}
           />
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {clientToDelete && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm"
+            onClick={() => {
+              if (!deletingClientId) {
+                setClientToDelete(null);
+              }
+            }}
+          >
+            <motion.div
+              initial={{ scale: 0.94, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.96, opacity: 0 }}
+              transition={{ duration: 0.18 }}
+              onClick={(e) => e.stopPropagation()}
+              className="glass w-full max-w-md rounded-2xl border border-slate-700/50 p-6"
+            >
+              <h3 className="text-lg font-bold text-white mb-2">Удалить клиента?</h3>
+              <p className="text-sm text-slate-400 mb-2">
+                Будет удален клиент <span className="text-white font-semibold">{clientToDelete.name}</span>.
+              </p>
+              <p className="text-sm text-slate-500 mb-6">
+                Это действие необратимо. Все связанные данные будут удалены.
+              </p>
+
+              <div className="flex gap-3">
+                <button
+                  type="button"
+                  disabled={Boolean(deletingClientId)}
+                  onClick={() => setClientToDelete(null)}
+                  className="flex-1 px-4 py-2.5 rounded-lg bg-slate-800/50 hover:bg-slate-700/50 border border-slate-700 text-slate-300 font-semibold transition disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Отмена
+                </button>
+                <button
+                  type="button"
+                  disabled={deletingClientId === clientToDelete.id}
+                  onClick={() => handleDelete(clientToDelete.id)}
+                  className="flex-1 px-4 py-2.5 rounded-lg bg-rose-600 hover:bg-rose-500 text-white font-semibold transition disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {deletingClientId === clientToDelete.id ? 'Удаляем...' : 'Удалить'}
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
         )}
       </AnimatePresence>
     </div>
@@ -1421,10 +1568,10 @@ function ClientModal({
         animate={{ opacity: 1, scale: 1 }}
         exit={{ opacity: 0, scale: 0.9 }}
         onClick={(e) => e.stopPropagation()}
-        className="glass w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-2xl border border-slate-700/50"
+        className="glass max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-2xl border border-slate-700/50"
       >
-        <div className="p-8 border-b border-slate-700/50 flex items-center justify-between sticky top-0 bg-slate-900/80 backdrop-blur z-10">
-          <h2 className="text-2xl font-bold text-white flex items-center gap-3">
+        <div className="sticky top-0 z-10 flex items-center justify-between border-b border-slate-700/50 bg-slate-900/90 p-4 backdrop-blur sm:p-6 md:p-8">
+          <h2 className="flex items-center gap-3 text-xl font-bold text-white md:text-2xl">
             <Users className="w-6 h-6 text-cyan-400" />
             {client ? 'Редактировать клиента' : 'Новый клиент'}
           </h2>
@@ -1438,7 +1585,7 @@ function ClientModal({
           </motion.button>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-8 space-y-6">
+        <form onSubmit={handleSubmit} className="space-y-5 p-4 sm:p-6 md:space-y-6 md:p-8">
           {/* BASIC INFO */}
           <div className="space-y-4">
             <h3 className="text-lg font-bold text-white flex items-center gap-2">
@@ -1536,7 +1683,7 @@ function ClientModal({
               Данные доступа (опционально)
             </h3>
 
-            <div className="p-5 rounded-xl bg-slate-800/30 border border-slate-700/50 space-y-4">
+            <div className="space-y-4 rounded-xl border border-slate-700/50 bg-slate-800/30 p-3 sm:p-5">
               {/* EMAIL LOGIN */}
               <div>
                 <label className="block text-sm font-bold text-slate-300 mb-2">
@@ -1671,7 +1818,7 @@ function ClientModal({
           </div>
 
           {/* ACTIONS */}
-          <div className="flex gap-4 pt-6 border-t border-slate-700/50">
+          <div className="flex flex-col-reverse gap-3 border-t border-slate-700/50 pt-5 sm:flex-row sm:gap-4 md:pt-6">
             <motion.button
               whileHover={{ scale: 1.02 }}
               type="button"

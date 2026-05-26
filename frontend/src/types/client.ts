@@ -1,3 +1,5 @@
+import type { SharingConsoleType } from '@/lib/sharing';
+
 export type OrderItemProduct = {
   id: number;
   name: string;
@@ -26,7 +28,8 @@ export type ClientOrder = {
   totalPrice: number | string;
   items: OrderItem[];
   createdBy?: OrderUser; // ✅ КТО СОЗДАЛ
-  manager?: OrderUser;   // ✅ КТО ЗАКРЫЛ
+  manager?: OrderUser;   // ✅ КТО ВЁЛ / БЫЛ НАЗНАЧЕН
+  completedBy?: OrderUser;
 };
 
 export type Subscription = {
@@ -34,13 +37,34 @@ export type Subscription = {
   type: string;
   endDate: string;
   status: string;
-  accountType?: 'PERSONAL' | 'SHARING_CLIENT';
+  accountType?: 'PERSONAL' | 'SHARING_CLIENT' | 'SHARING_DONOR';
+  clientSlot?: {
+    id: number;
+    consoleType?: string;
+    endDate?: string;
+    emailLogin?: string | null;
+    emailPassword?: string | null;
+    accountPassword?: string | null;
+    sharingSystem?: {
+      id: number;
+      name: string;
+      donor?: {
+        consoleType?: string;
+        endDate?: string;
+      };
+    };
+  };
+  donorAccount?: {
+    id: number;
+    consoleType?: string;
+    endDate?: string;
+  };
   sharingSystem?: {
     id: number;
     name: string;
     donor: {
-      email: string;
-      consoleType: 'PS4' | 'PS5';
+	      consoleType?: SharingConsoleType;
+      endDate?: string;
     };
   };
 };
@@ -49,6 +73,10 @@ export type Client = {
   id: number;
   name: string;
   phone: string;
+  telegramId?: string | null;
+  vkId?: string | null;
+  maxId?: string | null;
+  marketingConsent?: boolean;
   city?: string;
   address?: string;
   consoleType?: string;

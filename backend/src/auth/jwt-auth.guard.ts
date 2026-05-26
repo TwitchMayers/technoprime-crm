@@ -1,8 +1,4 @@
-import {
-  Injectable,
-  ExecutionContext,
-  UnauthorizedException,
-} from '@nestjs/common';
+import { Injectable, ExecutionContext, UnauthorizedException } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 
 @Injectable()
@@ -12,10 +8,7 @@ export class JwtAuthGuard extends AuthGuard('jwt') {
     const path: string = request.url || '';
 
     // ✅ Разрешаем без JWT ТОЛЬКО auth-эндпоинты
-    if (
-      path.startsWith('/auth/login') ||
-      path.startsWith('/auth/logout')
-    ) {
+    if (path.startsWith('/auth/login') || path.startsWith('/auth/logout')) {
       return true;
     }
 

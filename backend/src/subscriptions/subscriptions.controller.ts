@@ -1,7 +1,20 @@
-import { Controller, Get, Post, Delete, Body, Param, Query, Req } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Delete,
+  Body,
+  Param,
+  Query,
+  Req,
+  UnauthorizedException,
+  UseGuards,
+} from '@nestjs/common';
 import { SubscriptionsService } from './subscriptions.service';
+import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 
 @Controller('subscriptions')
+@UseGuards(JwtAuthGuard)
 export class SubscriptionsController {
   constructor(private readonly subscriptionsService: SubscriptionsService) {}
 
@@ -60,7 +73,10 @@ export class SubscriptionsController {
 
   @Delete(':id')
   async delete(@Param('id') id: string, @Req() req: any) {
-    const userId = req?.user?.id || 1;
+    const userId = Number(req?.user?.id);
+    if (!userId) {
+      throw new UnauthorizedException('Unauthorized');
+    }
     return this.subscriptionsService.delete(Number(id), userId);
   }
 }

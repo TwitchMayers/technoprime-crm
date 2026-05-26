@@ -7,6 +7,7 @@ import { motion } from 'framer-motion';
 import { fetchWithAuth } from '@/lib/fetchWithAuth';
 import ProtectedRoute from '@/components/ProtectedRoute';
 import { useAuth } from '@/contexts/AuthContext';
+import MobilePageHeader from '@/components/MobilePageHeader';
 
 type Product = {
   id: number;
@@ -16,11 +17,37 @@ type Product = {
   model?: string;
   stock: number;
   price: number;
-  costPrice: number;
+  costPrice?: number;
   isActive: boolean;
+  isAlwaysAvailable?: boolean;
+  storefrontCategory?: string | null;
+  coverImage?: string | null;
+  gallery?: string[] | string | null;
   serialNumber?: string;
   adSku?: string;
 };
+
+function normalizeGallery(value: Product['gallery'], coverImage?: string | null) {
+  if (Array.isArray(value)) {
+    const list = value.filter(
+      (item): item is string => typeof item === 'string' && Boolean(item.trim()),
+    );
+    if (coverImage && !list.includes(coverImage)) {
+      return [coverImage, ...list];
+    }
+    return list;
+  }
+  if (typeof value === 'string') {
+    try {
+      const parsed = JSON.parse(value);
+      if (Array.isArray(parsed)) return normalizeGallery(parsed, coverImage);
+      return coverImage ? [coverImage] : [];
+    } catch {
+      return value.trim() ? [value.trim()] : coverImage ? [coverImage] : [];
+    }
+  }
+  return coverImage ? [coverImage] : [];
+}
 
 const categoryIcons: Record<string, {icon: any; label: string; color: string}> = {
   CONSOLE: { icon: Package, label: 'Консоль', color: 'text-blue-400' },
@@ -46,27 +73,14 @@ export default function ProductsPage() {
       const params = new URLSearchParams();
       if (search) params.set('q', search);
       if (selectedCategory !== 'all') params.set('category', selectedCategory);
-      // ✅ ИСПРАВЛЕНО: правильная логика - НЕ используем isActive/isArchived в параметрах
-      // Показываем активные товары когда !showArchived, архивные когда showArchived
+      params.set('scope', 'warehouse');
 
       const data = await fetchWithAuth(`/api/products?${params}`);
-      
-      if (data && data.items && Array.isArray(data.items)) {
-        // ✅ ФИЛЬТРУЕМ на фронтенде
-        const filtered = data.items.filter((p: any) => {
-  if (showArchived) return !p.isActive;
-  return p.isActive;
-});
-        setProducts(filtered);
-      } else if (Array.isArray(data)) {
-        const filtered = data.filter(p => {
-          if (showArchived) return !p.isActive;
-          return p.isActive;
-        });
-        setProducts(filtered);
-      } else {
-        setProducts([]);
-      }
+      const list = Array.isArray(data?.items) ? data.items : Array.isArray(data) ? data : [];
+      const filtered = list
+        .filter((row: any) => !row?.storefrontCategory)
+        .filter((row: any) => (showArchived ? !row?.isActive : Boolean(row?.isActive)));
+      setProducts(filtered);
     } catch (err: any) {
       console.error('Failed to load products:', err);
       toast.error(err.message || 'Ошибка загрузки товаров');
@@ -105,12 +119,15 @@ export default function ProductsPage() {
     }
   };
 
-  const canManage = hasRole('ADMIN', 'MANAGER', 'TECHNICAL_SPECIALIST');
-  const canDelete = hasRole('ADMIN', 'MANAGER');
+  const canManage = hasRole('ADMIN', 'MANAGER', 'TECHNICAL_SPECIALIST', 'SUPER_ADMIN');
+  const canDelete = hasRole('ADMIN', 'MANAGER', 'SUPER_ADMIN');
+  const canSeeFinancials = user?.role !== 'MANAGER';
 
   const totalStock = products.reduce((sum, p) => sum + p.stock, 0);
   const inStock = products.filter(p => p.stock > 0).length;
-  const totalProfit = products.reduce((sum, p) => sum + ((p.price - p.costPrice) * p.stock), 0);
+  const totalProfit = canSeeFinancials
+    ? products.reduce((sum, p) => sum + ((p.price - Number(p.costPrice || 0)) * p.stock), 0)
+    : 0;
 
   const containerVariants = {
     hidden: { opacity: 0 },
@@ -123,8 +140,10 @@ export default function ProductsPage() {
   };
 
   return (
-    <ProtectedRoute allowedRoles={['ADMIN', 'MANAGER', 'TECHNICAL_SPECIALIST']}>
-      <div className="space-y-6 pb-24">
+    <ProtectedRoute allowedRoles={['ADMIN', 'MANAGER', 'TECHNICAL_SPECIALIST', 'SUPER_ADMIN']}>
+      <div className="mobile-page-shell md:space-y-6 md:pb-24">
+        <MobilePageHeader title="Склад" subtitle={`${products.length} позиций · ${totalStock} единиц`} sticky={false} />
+
         {/* HEADER */}
         <motion.div
           initial={{ opacity: 0, y: -20 }}
@@ -132,14 +151,12 @@ export default function ProductsPage() {
           className="relative overflow-hidden rounded-2xl border border-slate-700"
         >
           <div className="absolute inset-0 bg-gradient-to-r from-blue-600/20 via-purple-600/20 to-pink-600/20"></div>
-          <div className="relative bg-slate-900/60 backdrop-blur-xl p-8">
-            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-6">
-              <div>
-                <h1 className="text-4xl font-bold text-white mb-2">
-                  Каталог товаров
-                </h1>
+          <div className="relative bg-slate-900/60 p-3 backdrop-blur-xl sm:p-5 md:p-8">
+            <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between md:gap-6">
+              <div className="hidden md:block">
+                <h1 className="mb-2 text-4xl font-bold text-white">Склад</h1>
                 <p className="text-slate-400">
-                  {products.length} товаров • {totalStock} единиц в наличии
+                  {products.length} складских позиций • {totalStock} единиц в наличии
                 </p>
               </div>
               {canManage && (
@@ -150,10 +167,10 @@ export default function ProductsPage() {
                     setEditingProduct(null);
                     setModalOpen(true);
                   }}
-                  className="px-8 py-3 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white font-bold shadow-lg flex items-center gap-2 whitespace-nowrap transition-all"
+                  className="flex min-h-11 w-full items-center justify-center gap-2 whitespace-nowrap rounded-2xl bg-gradient-to-r from-cyan-500 to-blue-600 px-4 py-3 text-sm font-bold text-white shadow-lg transition-all hover:from-cyan-400 hover:to-blue-500 md:w-auto md:rounded-xl md:px-8"
                 >
                   <Plus className="w-5 h-5" />
-                  Добавить товар
+                  Добавить позицию
                 </motion.button>
               )}
             </div>
@@ -165,25 +182,27 @@ export default function ProductsPage() {
           variants={containerVariants}
           initial="hidden"
           animate="visible"
-          className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4"
+          className="grid grid-cols-2 gap-2.5 sm:grid-cols-2 md:gap-4 lg:grid-cols-4"
         >
           {[
             { label: 'Всего товаров', value: products.length, icon: Package, bgGradient: 'from-blue-600/20 to-blue-600/5' },
             { label: 'В наличии', value: inStock, icon: TrendingUp, bgGradient: 'from-green-600/20 to-green-600/5' },
             { label: 'Единиц', value: totalStock, icon: Box, bgGradient: 'from-purple-600/20 to-purple-600/5' },
-            { label: 'Прибыль', value: `${(totalProfit / 1000).toFixed(1)}K ₽`, icon: DollarSign, bgGradient: 'from-amber-600/20 to-amber-600/5' },
+            canSeeFinancials
+              ? { label: 'Прибыль', value: `${(totalProfit / 1000).toFixed(1)}K ₽`, icon: DollarSign, bgGradient: 'from-amber-600/20 to-amber-600/5' }
+              : { label: 'Категорий', value: Object.keys(categoryIcons).length, icon: DollarSign, bgGradient: 'from-amber-600/20 to-amber-600/5' },
           ].map(({ label, value, icon: Icon, bgGradient }, idx) => (
             <motion.div
               key={idx}
               variants={itemVariants}
-              className={`bg-gradient-to-br ${bgGradient} border border-slate-700 rounded-xl p-6 hover:border-slate-600 transition-all`}
+              className={`rounded-xl border border-slate-700 bg-gradient-to-br ${bgGradient} p-3 transition-all hover:border-slate-600 sm:p-5 md:p-6`}
             >
               <div className="flex items-start justify-between">
                 <div className="flex-1">
-                  <p className="text-sm text-slate-400 mb-2">{label}</p>
-                  <p className="text-3xl font-bold text-white">{value}</p>
+                  <p className="mb-1.5 text-xs text-slate-400 sm:mb-2 sm:text-sm">{label}</p>
+                  <p className="text-2xl font-bold text-white sm:text-3xl">{value}</p>
                 </div>
-                <Icon className="w-8 h-8 text-slate-500" />
+                <Icon className="h-6 w-6 text-slate-500 sm:h-8 sm:w-8" />
               </div>
             </motion.div>
           ))}
@@ -194,7 +213,7 @@ export default function ProductsPage() {
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.1 }}
-          className="bg-slate-900/40 backdrop-blur border border-slate-700 rounded-2xl p-6"
+          className="rounded-2xl border border-slate-700 bg-slate-900/40 p-3 backdrop-blur sm:p-5 md:p-6"
         >
           <div className="space-y-4">
             {/* Поиск */}
@@ -210,8 +229,8 @@ export default function ProductsPage() {
             </div>
 
             {/* Категории */}
-            <div className="flex flex-col lg:flex-row gap-4">
-              <div className="flex gap-2 overflow-x-auto pb-2">
+            <div className="flex flex-col gap-3 lg:flex-row lg:gap-4">
+              <div className="mobile-scroll-row lg:mx-0 lg:flex lg:overflow-visible lg:px-0 lg:pb-0">
                 <button
                   onClick={() => setSelectedCategory('all')}
                   className={`px-4 py-2 rounded-lg transition-all whitespace-nowrap font-medium text-sm ${
@@ -241,7 +260,7 @@ export default function ProductsPage() {
 
               <button
                 onClick={() => setShowArchived(!showArchived)}
-                className={`px-4 py-2 rounded-lg transition-all whitespace-nowrap font-medium text-sm flex items-center gap-2 ml-auto ${
+                className={`ml-0 flex min-h-10 items-center justify-center gap-2 whitespace-nowrap rounded-xl px-4 py-2 text-sm font-medium transition-all lg:ml-auto ${
                   showArchived
                     ? 'bg-orange-600 text-white'
                     : 'bg-slate-800/50 text-slate-300 hover:bg-slate-700/50 border border-slate-700'
@@ -269,7 +288,7 @@ export default function ProductsPage() {
             className="bg-slate-900/40 border border-slate-700 rounded-2xl p-12 text-center"
           >
             <Box className="w-20 h-20 mx-auto mb-4 text-slate-600" />
-            <h3 className="text-xl font-bold text-slate-300 mb-2">Товары не найдены</h3>
+            <h3 className="text-xl font-bold text-slate-300 mb-2">Складские позиции не найдены</h3>
             <p className="text-slate-500 mb-6">
               {showArchived ? 'В архиве нет товаров' : 'Начните с добавления первого товара'}
             </p>
@@ -297,7 +316,7 @@ export default function ProductsPage() {
           >
             {products.map((product) => {
               const cat = categoryIcons[product.category] || categoryIcons.CONSOLE;
-              const profit = product.price - product.costPrice;
+              const profit = product.price - Number(product.costPrice || 0);
               const profitPercent = product.price > 0 ? Math.round((profit / product.price) * 100) : 0;
               const stockStatus = product.stock > 10 ? 'high' : product.stock > 0 ? 'low' : 'out';
               const Icon = cat.icon;
@@ -334,23 +353,31 @@ export default function ProductsPage() {
                     </p>
                   )}
 
+                  {product.isAlwaysAvailable ? (
+                    <p className="text-[11px] text-emerald-300 mb-3">Всегда в наличии</p>
+                  ) : null}
+
                   {/* Цены и прибыль */}
                   <div className="space-y-3 mb-4 p-4 rounded-lg bg-slate-800/30 border border-slate-700">
                     <div className="flex justify-between items-center">
                       <span className="text-sm text-slate-400">Цена:</span>
                       <span className="font-bold text-cyan-400">{product.price.toLocaleString()} ₽</span>
                     </div>
-                    <div className="flex justify-between items-center">
-                      <span className="text-sm text-slate-400">Себестоимость:</span>
-                      <span className="text-sm text-slate-300">{product.costPrice.toLocaleString()} ₽</span>
-                    </div>
-                    <div className="h-px bg-slate-700"></div>
-                    <div className="flex justify-between items-center">
-                      <span className="text-sm text-slate-400">Маржа:</span>
-                      <span className={`font-bold text-lg ${profit > 0 ? 'text-green-400' : 'text-red-400'}`}>
-                        +{profit.toLocaleString()} ₽ ({profitPercent}%)
-                      </span>
-                    </div>
+                    {canSeeFinancials ? (
+                      <>
+                        <div className="flex justify-between items-center">
+                          <span className="text-sm text-slate-400">Себестоимость:</span>
+                          <span className="text-sm text-slate-300">{Number(product.costPrice || 0).toLocaleString()} ₽</span>
+                        </div>
+                        <div className="h-px bg-slate-700"></div>
+                        <div className="flex justify-between items-center">
+                          <span className="text-sm text-slate-400">Маржа:</span>
+                          <span className={`font-bold text-lg ${profit > 0 ? 'text-green-400' : 'text-red-400'}`}>
+                            +{profit.toLocaleString()} ₽ ({profitPercent}%)
+                          </span>
+                        </div>
+                      </>
+                    ) : null}
                   </div>
 
                   {/* Действия */}
@@ -408,6 +435,7 @@ export default function ProductsPage() {
         {modalOpen && (
           <ProductModal
             product={editingProduct}
+            canSeeFinancials={canSeeFinancials}
             onClose={() => {
               setModalOpen(false);
               setEditingProduct(null);
@@ -426,10 +454,12 @@ export default function ProductsPage() {
 
 function ProductModal({ 
   product, 
+  canSeeFinancials,
   onClose, 
   onSave 
 }: {
   product: Product | null;
+  canSeeFinancials: boolean;
   onClose: () => void;
   onSave: () => void;
 }) {
@@ -438,12 +468,88 @@ function ProductModal({
     category: product?.category || 'CONSOLE',
     brand: product?.brand || '',
     model: product?.model || '',
-    stock: product?.stock || 0,
     price: product?.price || 0,
     costPrice: product?.costPrice || 0,
+    isAlwaysAvailable: Boolean(product?.isAlwaysAvailable),
     serialNumber: product?.serialNumber || '',
   });
+  const [stockDelta, setStockDelta] = useState(product ? 0 : 1);
   const [saving, setSaving] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [gallery, setGallery] = useState<string[]>(normalizeGallery(product?.gallery, product?.coverImage));
+  const [coverImage, setCoverImage] = useState<string | null>(product?.coverImage || null);
+  const [pendingFiles, setPendingFiles] = useState<File[]>([]);
+
+  const syncMediaState = (payload: any) => {
+    const nextCover = payload?.coverImage || null;
+    const nextGallery = normalizeGallery(payload?.gallery, nextCover);
+    setCoverImage(nextCover);
+    setGallery(nextGallery);
+  };
+
+  const uploadFilesForProduct = async (productId: number, files: File[]) => {
+    if (!files.length) return;
+
+    setUploading(true);
+    try {
+      const form = new FormData();
+      files.forEach((file) => form.append('files', file));
+      const media = await fetchWithAuth(`/api/products/${productId}/images`, {
+        method: 'POST',
+        body: form,
+      });
+      syncMediaState(media);
+      setPendingFiles([]);
+      toast.success('Фото загружены');
+    } catch (err: any) {
+      toast.error(err.message || 'Ошибка загрузки фото');
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const setAsCover = async (url: string) => {
+    if (!product?.id) return;
+    try {
+      const media = await fetchWithAuth(`/api/products/${product.id}/images/cover`, {
+        method: 'PATCH',
+        body: JSON.stringify({ url }),
+      });
+      syncMediaState(media);
+    } catch (err: any) {
+      toast.error(err.message || 'Ошибка выбора главного фото');
+    }
+  };
+
+  const reorderGallery = async (next: string[]) => {
+    if (!product?.id) {
+      setGallery(next);
+      return;
+    }
+    try {
+      const media = await fetchWithAuth(`/api/products/${product.id}/images/reorder`, {
+        method: 'PATCH',
+        body: JSON.stringify({ images: next }),
+      });
+      syncMediaState(media);
+    } catch (err: any) {
+      toast.error(err.message || 'Ошибка сортировки фото');
+    }
+  };
+
+  const removeImage = async (url: string) => {
+    if (!product?.id) return;
+    try {
+      const media = await fetchWithAuth(`/api/products/${product.id}/images`, {
+        method: 'DELETE',
+        body: JSON.stringify({ url }),
+      });
+      syncMediaState(media);
+      toast.success('Фото удалено');
+    } catch (err: any) {
+      toast.error(err.message || 'Ошибка удаления фото');
+    }
+  };
 
   const handleSave = async () => {
     if (!formData.name.trim()) {
@@ -456,16 +562,35 @@ function ProductModal({
       const url = product ? `/api/products/${product.id}` : `/api/products`;
       const method = product ? 'PATCH' : 'POST';
 
-      await fetchWithAuth(url, {
+      const response = await fetchWithAuth(url, {
         method,
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          ...formData,
+          name: formData.name,
+          category: formData.category,
+          brand: formData.brand || null,
+          model: formData.model || null,
+          price: formData.price,
+          ...(canSeeFinancials ? { costPrice: formData.costPrice } : {}),
+          serialNumber: formData.serialNumber || null,
+          isAlwaysAvailable: formData.isAlwaysAvailable,
+          storefrontCategory: null,
           isActive: true,
         }),
       });
 
-      toast.success(product ? 'Товар обновлён' : 'Товар создан');
+      const savedProductId = Number(response?.id || product?.id || 0);
+      const qtyDelta = Math.trunc(Number(stockDelta || 0));
+      if (savedProductId && qtyDelta !== 0) {
+        await fetchWithAuth(`/api/products/${savedProductId}/stock/adjust`, {
+          method: 'PATCH',
+          body: JSON.stringify({ delta: qtyDelta }),
+        });
+      }
+      if (savedProductId && pendingFiles.length) {
+        await uploadFilesForProduct(savedProductId, pendingFiles);
+      }
+
+      toast.success(product ? 'Складская позиция обновлена' : 'Складская позиция создана');
       onSave();
     } catch (err: any) {
       toast.error(err.message || 'Ошибка сохранения');
@@ -483,12 +608,12 @@ function ProductModal({
         animate={{ opacity: 1 }}
       />
       <motion.div
-        className="bg-slate-900 border border-slate-700 w-full max-w-2xl p-8 relative max-h-[90vh] overflow-y-auto rounded-2xl shadow-2xl"
+        className="relative max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-2xl border border-slate-700 bg-slate-900 p-4 shadow-2xl sm:p-6 md:p-8"
         initial={{ scale: 0.9, opacity: 0 }}
         animate={{ scale: 1, opacity: 1 }}
       >
-        <h2 className="text-3xl font-bold text-white mb-6">
-          {product ? 'Редактировать товар' : 'Добавить новый товар'}
+        <h2 className="mb-5 text-2xl font-bold text-white md:mb-6 md:text-3xl">
+          {product ? 'Редактировать складскую позицию' : 'Добавить складскую позицию'}
         </h2>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
@@ -548,13 +673,25 @@ function ProductModal({
           </div>
 
           <div>
-            <label className="text-sm text-slate-300 mb-2 block font-bold">Остаток (шт)</label>
+            <label className="text-sm text-slate-300 mb-2 block font-bold">
+              Изменение остатка (шт)
+            </label>
             <input
               type="number"
               className="w-full px-4 py-3 rounded-lg bg-slate-800/50 border border-slate-700 text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/50 transition"
-              value={formData.stock}
-              onChange={(e) => setFormData({...formData, stock: Math.max(0, Number(e.target.value))})}
+              value={stockDelta}
+              onChange={(e) => setStockDelta(Math.trunc(Number(e.target.value || 0)))}
             />
+            <div className="mt-1 text-xs text-slate-500">
+              {product
+                ? 'Плюс добавит единицы на склад, минус снимет доступные единицы.'
+                : 'Для новой позиции обычно 1. Для услуг/подписок можно поставить любое количество.'}
+            </div>
+            {product ? (
+              <div className="mt-1 text-xs text-cyan-300">
+                Текущий остаток: {Math.max(0, Number(product.stock || 0))} шт
+              </div>
+            ) : null}
           </div>
 
           <div>
@@ -567,14 +704,98 @@ function ProductModal({
             />
           </div>
 
-          <div>
-            <label className="text-sm text-slate-300 mb-2 block font-bold">Себестоимость (₽)</label>
+          {canSeeFinancials ? (
+            <div>
+              <label className="text-sm text-slate-300 mb-2 block font-bold">Себестоимость (₽)</label>
+              <input
+                type="number"
+                className="w-full px-4 py-3 rounded-lg bg-slate-800/50 border border-slate-700 text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/50 transition"
+                value={formData.costPrice}
+                onChange={(e) => setFormData({...formData, costPrice: Math.max(0, Number(e.target.value))})}
+              />
+            </div>
+          ) : null}
+
+          <div className="md:col-span-2">
+            <label className="inline-flex items-center gap-2 text-sm text-slate-200 font-medium">
+              <input
+                type="checkbox"
+                checked={formData.isAlwaysAvailable}
+                onChange={(e) =>
+                  setFormData({ ...formData, isAlwaysAvailable: e.target.checked })
+                }
+              />
+              Всегда в наличии (цифровой сервис, без списания со склада)
+            </label>
+          </div>
+
+          <div className="md:col-span-2 rounded-xl border border-slate-700 bg-slate-800/30 p-4 space-y-3">
+            <div className="text-sm font-bold text-slate-200">Фото товара</div>
             <input
-              type="number"
-              className="w-full px-4 py-3 rounded-lg bg-slate-800/50 border border-slate-700 text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/50 transition"
-              value={formData.costPrice}
-              onChange={(e) => setFormData({...formData, costPrice: Math.max(0, Number(e.target.value))})}
+              type="file"
+              multiple
+              accept="image/*"
+              onChange={(e) => setPendingFiles(Array.from(e.target.files || []))}
+              className="w-full text-sm text-slate-300 file:mr-3 file:rounded-lg file:border-0 file:bg-cyan-600 file:px-3 file:py-2 file:text-white"
             />
+            {pendingFiles.length > 0 ? (
+              <div className="text-xs text-slate-400">
+                Выбрано файлов: {pendingFiles.length}
+                {product?.id ? ' (загрузятся при сохранении)' : ' (сначала создай товар)'}
+              </div>
+            ) : null}
+
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              {gallery.map((url, index) => (
+                <div key={url} className="rounded-lg border border-slate-700 p-2 space-y-2">
+                  <img src={url} alt={`img-${index}`} className="h-24 w-full rounded object-cover" />
+                  <div className="grid grid-cols-2 gap-1">
+                    <button
+                      type="button"
+                      className={`rounded px-2 py-1 text-xs ${
+                        coverImage === url
+                          ? 'bg-emerald-600 text-white'
+                          : 'bg-slate-700 text-slate-200'
+                      }`}
+                      onClick={() => setAsCover(url)}
+                    >
+                      Главная
+                    </button>
+                    <button
+                      type="button"
+                      className="rounded bg-rose-600 px-2 py-1 text-xs text-white"
+                      onClick={() => removeImage(url)}
+                    >
+                      Удалить
+                    </button>
+                    <button
+                      type="button"
+                      className="rounded bg-slate-700 px-2 py-1 text-xs text-slate-200 disabled:opacity-50"
+                      disabled={index === 0}
+                      onClick={() => {
+                        const next = [...gallery];
+                        [next[index - 1], next[index]] = [next[index], next[index - 1]];
+                        void reorderGallery(next);
+                      }}
+                    >
+                      ←
+                    </button>
+                    <button
+                      type="button"
+                      className="rounded bg-slate-700 px-2 py-1 text-xs text-slate-200 disabled:opacity-50"
+                      disabled={index === gallery.length - 1}
+                      onClick={() => {
+                        const next = [...gallery];
+                        [next[index + 1], next[index]] = [next[index], next[index + 1]];
+                        void reorderGallery(next);
+                      }}
+                    >
+                      →
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
         </div>
 
@@ -591,10 +812,10 @@ function ProductModal({
             whileHover={{ scale: 1.02 }}
             whileTap={{ scale: 0.98 }}
             onClick={handleSave}
-            disabled={saving}
+            disabled={saving || uploading}
             className="px-6 py-2.5 rounded-lg bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white font-bold disabled:opacity-50 transition-all"
           >
-            {saving ? 'Сохранение...' : (product ? 'Сохранить' : 'Создать')}
+            {saving || uploading ? 'Сохранение...' : (product ? 'Сохранить' : 'Создать')}
           </motion.button>
         </div>
       </motion.div>

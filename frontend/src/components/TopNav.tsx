@@ -6,13 +6,13 @@ import NotificationBell from './NotificationBell';
 import UserMenu from './UserMenu';
 
 const tabs = [
-  { href: '/dashboard',       label: 'Дашборд' },
   { href: '/clients',         label: 'Клиенты' },
   { href: '/products',        label: 'Товары' },
   { href: '/orders',          label: 'Заказы' },
   { href: '/orders/new',      label: 'Новый заказ' },
   { href: '/tasks',           label: 'Задачи' },
   { href: '/subscriptions',   label: 'Подписки' },
+  { href: '/communication-center', label: 'Коммуникации' },
 ];
 
 export default function TopNav() {

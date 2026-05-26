@@ -6,8 +6,10 @@ import { Search, Info, Trash2, CreditCard, Calendar as CalendarIcon, Users, User
 import { toast } from 'sonner';
 import { motion } from 'framer-motion';
 import { fetchWithAuth } from '@/lib/fetchWithAuth';
+import type { SharingConsoleType } from '@/lib/sharing';
 import ProtectedRoute from '@/components/ProtectedRoute';
 import { useAuth } from '@/contexts/AuthContext';
+import MobilePageHeader from '@/components/MobilePageHeader';
 
 type Subscription = {
   id:number;
@@ -37,27 +39,39 @@ type Subscription = {
   // Новые поля для системы шеринга
   clientSlot?: {
     id: number;
-    consoleType: 'PS4' | 'PS5';
+    consoleType: SharingConsoleType;
+    emailLogin?: string;
+    emailPassword?: string;
+    accountPassword?: string;
     sharingSystem?: {
       id: number;
       name: string;
       donor?: {
-        email: string;
-        consoleType: 'PS4' | 'PS5';
+        consoleType: SharingConsoleType;
       };
     };
   };
   donorAccount?: {
     id: number;
     email: string;
-    consoleType: 'PS4' | 'PS5';
+    consoleType: SharingConsoleType;
   };
 };
 
+type ClientOption = {
+  id: number;
+  name: string;
+  phone: string;
+  consoleType?: string | null;
+  emailLogin?: string | null;
+  emailPassword?: string | null;
+  accountPassword?: string | null;
+};
+
 const typeLabels: Record<string, string> = {
-  PS_PLUS: '🎮 PS Plus',
-  GAME_PASS: '🎯 GamePass',
-  EA_PLAY: '⚽ EA Play',
+  PS_PLUS: 'PS Plus',
+  GAME_PASS: 'Game Pass',
+  EA_PLAY: 'EA Play',
 };
 
 const accountTypeLabels = {
@@ -66,15 +80,60 @@ const accountTypeLabels = {
   SHARING_DONOR: { label: 'Шеринг-донор', icon: Link, color: 'text-teal-400 bg-teal-500/20 border-teal-500/30' },
 };
 
+function getSubscriptionOwnerLabel(sub: Subscription) {
+  if (sub.client?.name) return sub.client.name;
+  if (sub.accountType === 'SHARING_DONOR') return 'Донорский аккаунт';
+  return '—';
+}
+
+function getSubscriptionOwnerSubtitle(sub: Subscription) {
+  if (sub.client?.phone) return sub.client.phone;
+  if (sub.accountType === 'SHARING_DONOR') return 'Данные донора скрыты';
+  return '—';
+}
+
+function getVisibleAccountFields(sub: Subscription) {
+  const source =
+    sub.accountType === 'PERSONAL'
+      ? {
+          emailLogin: sub.client?.emailLogin,
+          emailPassword: sub.client?.emailPassword,
+          accountPassword: sub.client?.accountPassword,
+        }
+      : sub.accountType === 'SHARING_CLIENT'
+        ? {
+            emailLogin: sub.clientSlot?.emailLogin,
+            emailPassword: sub.clientSlot?.emailPassword,
+            accountPassword: sub.clientSlot?.accountPassword,
+          }
+        : null;
+
+  if (!source) return [] as Array<{ label: string; value: string }>;
+
+  return [
+    source.emailLogin ? { label: 'Логин', value: source.emailLogin } : null,
+    source.emailPassword ? { label: 'Пароль почты', value: source.emailPassword } : null,
+    source.accountPassword ? { label: 'Пароль профиля', value: source.accountPassword } : null,
+  ].filter(Boolean) as Array<{ label: string; value: string }>;
+}
+
+function getAccountFieldsTitle(sub: Subscription) {
+  if (sub.accountType === 'SHARING_CLIENT') return 'Данные подключенного аккаунта';
+  if (sub.accountType === 'PERSONAL') return 'Данные аккаунта';
+  return 'Данные доступа';
+}
+
 export default function SubscriptionsPage() {
   const { user, hasRole } = useAuth();
   const [subs, setSubs] = useState<Subscription[]>([]);
+  const [clients, setClients] = useState<ClientOption[]>([]);
   const [q, setQ] = useState('');
   const [filterType, setFilterType] = useState<'all'|'PS_PLUS'|'GAME_PASS'|'EA_PLAY'>('all');
   const [filterAccountType, setFilterAccountType] = useState<'all'|'PERSONAL'|'SHARING_CLIENT'|'SHARING_DONOR'>('all');
   const [loading, setLoading] = useState(false);
   const [detailSub, setDetailSub] = useState<Subscription | null>(null);
   const [showSharingModal, setShowSharingModal] = useState(false);
+  const [showCreateModal, setShowCreateModal] = useState(false);
 
   const load = async () => {
     setLoading(true);
@@ -96,9 +155,15 @@ export default function SubscriptionsPage() {
     setLoading(false);
   };
 
+  const loadClients = async () => {
+    const res = await fetchWithAuth('/api/clients?limit=500').catch(() => ({ items: [] }));
+    const list = Array.isArray(res) ? res : (res?.items || []);
+    setClients(Array.isArray(list) ? list : []);
+  };
+
   useEffect(() => { 
     if (user) {
-      load(); 
+      void Promise.all([load(), loadClients()]);
     }
   }, [filterType, filterAccountType, user]);
 
@@ -135,10 +200,12 @@ export default function SubscriptionsPage() {
 
   return (
     <ProtectedRoute allowedRoles={['ADMIN', 'MANAGER']}>
-      <div className="space-y-4">
+      <div className="mobile-page-shell md:space-y-4">
+        <MobilePageHeader title="Подписки" subtitle="Шеринг, продления и доступы" sticky={false} />
+
         {/* Header */}
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div>
+        <div className="flex flex-col justify-between gap-3 rounded-2xl border border-slate-700/60 bg-slate-900/35 p-3 md:flex-row md:items-center md:gap-4 md:border-0 md:bg-transparent md:p-0">
+          <div className="hidden md:block">
             <h1 className="text-2xl font-bold bg-gradient-to-r from-purple-400 to-teal-400 bg-clip-text text-transparent">
               Подписки
             </h1>
@@ -146,7 +213,14 @@ export default function SubscriptionsPage() {
               Управление подписками и системами шеринга
             </p>
           </div>
-          <div className="flex gap-2">
+          <div className="mobile-action-grid md:flex md:gap-2">
+            <button
+              className="btn-primary flex items-center gap-2"
+              onClick={() => setShowCreateModal(true)}
+            >
+              <Plus className="w-4 h-4" />
+              Добавить подписку
+            </button>
             <button 
               className="btn-secondary flex items-center gap-2"
               onClick={() => setShowSharingModal(true)}
@@ -158,8 +232,8 @@ export default function SubscriptionsPage() {
         </div>
 
         {/* Search & Filters */}
-        <div className="glass p-4">
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+        <div className="glass p-3 md:p-4">
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
               <input
@@ -177,9 +251,9 @@ export default function SubscriptionsPage() {
               onChange={e=>setFilterType(e.target.value as any)}
             >
               <option value="all">Все типы подписок</option>
-              <option value="PS_PLUS">🎮 PS Plus</option>
-              <option value="GAME_PASS">🎯 GamePass</option>
-              <option value="EA_PLAY">⚽ EA Play</option>
+              <option value="PS_PLUS">PS Plus</option>
+              <option value="GAME_PASS">Game Pass</option>
+              <option value="EA_PLAY">EA Play</option>
             </select>
 
             <select 
@@ -188,9 +262,9 @@ export default function SubscriptionsPage() {
               onChange={e=>setFilterAccountType(e.target.value as any)}
             >
               <option value="all">Все типы аккаунтов</option>
-              <option value="PERSONAL">👤 Персональные</option>
-              <option value="SHARING_CLIENT">👥 Шеринг-клиенты</option>
-              <option value="SHARING_DONOR">🔗 Шеринг-доноры</option>
+              <option value="PERSONAL">Персональные</option>
+              <option value="SHARING_CLIENT">Шеринг-клиенты</option>
+              <option value="SHARING_DONOR">Шеринг-доноры</option>
             </select>
 
             <button className="btn-primary text-sm" onClick={load}>Найти</button>
@@ -198,28 +272,28 @@ export default function SubscriptionsPage() {
         </div>
 
         {/* Stats Cards */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <div className="glass p-4 text-center">
-            <div className="text-2xl font-bold text-white">{subs.length}</div>
-            <div className="text-sm text-slate-400">Всего подписок</div>
+        <div className="grid grid-cols-2 gap-2.5 md:grid-cols-4 md:gap-4">
+          <div className="glass p-3 text-center md:p-4">
+            <div className="text-xl font-bold text-white md:text-2xl">{subs.length}</div>
+            <div className="text-xs text-slate-400 md:text-sm">Всего подписок</div>
           </div>
-          <div className="glass p-4 text-center">
-            <div className="text-2xl font-bold text-blue-400">
+          <div className="glass p-3 text-center md:p-4">
+            <div className="text-xl font-bold text-blue-400 md:text-2xl">
               {subs.filter(s => s.accountType === 'PERSONAL').length}
             </div>
-            <div className="text-sm text-slate-400">Персональные</div>
+            <div className="text-xs text-slate-400 md:text-sm">Персональные</div>
           </div>
-          <div className="glass p-4 text-center">
-            <div className="text-2xl font-bold text-purple-400">
+          <div className="glass p-3 text-center md:p-4">
+            <div className="text-xl font-bold text-purple-400 md:text-2xl">
               {subs.filter(s => s.accountType === 'SHARING_CLIENT').length}
             </div>
-            <div className="text-sm text-slate-400">Шеринг-клиенты</div>
+            <div className="text-xs text-slate-400 md:text-sm">Шеринг-клиенты</div>
           </div>
-          <div className="glass p-4 text-center">
-            <div className="text-2xl font-bold text-teal-400">
+          <div className="glass p-3 text-center md:p-4">
+            <div className="text-xl font-bold text-teal-400 md:text-2xl">
               {subs.filter(s => s.accountType === 'SHARING_DONOR').length}
             </div>
-            <div className="text-sm text-slate-400">Шеринг-доноры</div>
+            <div className="text-xs text-slate-400 md:text-sm">Шеринг-доноры</div>
           </div>
         </div>
 
@@ -252,8 +326,8 @@ export default function SubscriptionsPage() {
                     return (
                       <tr key={s.id} className="border-t border-slate-700/50 hover:bg-slate-800/30 transition">
                         <td className="p-4">
-                          <div className="text-white font-medium">{s.client?.name || s.donorAccount?.email || '—'}</div>
-                          <div className="text-sm text-slate-400">{s.client?.phone || 'Донорский аккаунт'}</div>
+                          <div className="text-white font-medium">{getSubscriptionOwnerLabel(s)}</div>
+                          <div className="text-sm text-slate-400">{getSubscriptionOwnerSubtitle(s)}</div>
                         </td>
                         <td className="p-4 text-slate-300">{typeLabels[s.type] || s.type}</td>
                         <td className="p-4">
@@ -338,15 +412,15 @@ export default function SubscriptionsPage() {
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: idx * 0.05 }}
-                  className="glass p-4 active:scale-[0.98] transition-transform"
+                  className="glass p-3 transition-transform active:scale-[0.98] sm:p-4"
                 >
                   {/* Header */}
-                  <div className="flex items-start justify-between mb-3">
-                    <div className="flex-1">
-                      <div className="text-lg font-bold text-white">
-                        {s.client?.name || s.donorAccount?.email || '—'}
+                  <div className="mb-3 flex items-start justify-between gap-3">
+                    <div className="min-w-0 flex-1">
+                      <div className="truncate text-base font-bold text-white sm:text-lg">
+                        {getSubscriptionOwnerLabel(s)}
                       </div>
-                      <div className="flex items-center gap-2 mt-1">
+                      <div className="mt-1 flex flex-wrap items-center gap-2">
                         <div className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-bold ${accountTypeConfig.color} border`}>
                           <AccountTypeIcon className="w-3 h-3" />
                           {accountTypeConfig.label}
@@ -378,6 +452,13 @@ export default function SubscriptionsPage() {
                         <a href={`tel:${s.client.phone}`} className="text-slate-300 hover:text-teal-400 transition">
                           {s.client.phone}
                         </a>
+                      </div>
+                    )}
+
+                    {s.accountType === 'SHARING_DONOR' && (
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="text-slate-500">Доступ:</span>
+                        <span className="text-slate-300">Данные донора скрыты</span>
                       </div>
                     )}
                     
@@ -439,10 +520,21 @@ export default function SubscriptionsPage() {
             sub={detailSub} 
             onClose={()=>{
               setDetailSub(null);
-              load();
+              void load();
             }} 
             onDelete={deleteSub}
             canDelete={canDelete}
+          />
+        )}
+
+        {showCreateModal && (
+          <CreateSubscriptionModal
+            clients={clients}
+            onClose={() => setShowCreateModal(false)}
+            onCreated={async () => {
+              setShowCreateModal(false);
+              await Promise.all([load(), loadClients()]);
+            }}
           />
         )}
 
@@ -488,6 +580,7 @@ function SubDetailModal({
 
   const accountTypeConfig = accountTypeLabels[sub.accountType];
   const AccountTypeIcon = accountTypeConfig.icon;
+  const visibleAccountFields = getVisibleAccountFields(sub);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 md:p-0">
@@ -539,14 +632,12 @@ function SubDetailModal({
               {sub.accountType === 'SHARING_DONOR' ? 'Донорский аккаунт' : 'Клиент'}
             </div>
             <div className="font-semibold text-white text-lg">
-              {sub.client?.name || sub.donorAccount?.email || '—'}
+              {getSubscriptionOwnerLabel(sub)}
             </div>
-            {sub.client?.phone && (
-              <div className="text-sm text-slate-400 mt-1">{sub.client.phone}</div>
-            )}
-            {sub.client?.consoleType && (
+            <div className="text-sm text-slate-400 mt-1">{getSubscriptionOwnerSubtitle(sub)}</div>
+            {sub.client?.consoleType ? (
               <div className="text-sm text-slate-400 mt-1">{sub.client.consoleType}</div>
-            )}
+            ) : null}
           </div>
 
           {/* Sharing System Info */}
@@ -561,12 +652,10 @@ function SubDetailModal({
                   <span className="text-slate-400">Тип консоли:</span>
                   <span className="text-white">{sub.clientSlot.consoleType}</span>
                 </div>
-                {sub.clientSlot.sharingSystem.donor && (
-                  <div className="flex justify-between">
-                    <span className="text-slate-400">Донорский аккаунт:</span>
-                    <span className="text-white">{sub.clientSlot.sharingSystem.donor.email}</span>
-                  </div>
-                )}
+                <div className="flex justify-between">
+                  <span className="text-slate-400">Доступ:</span>
+                  <span className="text-white">Через подключенный слот</span>
+                </div>
               </div>
             </div>
           )}
@@ -577,12 +666,11 @@ function SubDetailModal({
               <div className="text-xs text-slate-500 uppercase mb-2">Донорский аккаунт</div>
               <div className="space-y-2 text-sm">
                 <div className="flex justify-between">
-                  <span className="text-slate-400">Email:</span>
-                  <span className="text-white font-mono text-xs">{sub.donorAccount.email}</span>
-                </div>
-                <div className="flex justify-between">
                   <span className="text-slate-400">Тип консоли:</span>
                   <span className="text-white">{sub.donorAccount.consoleType}</span>
+                </div>
+                <div className="text-slate-300">
+                  Данные донора скрыты и не показываются в клиентских профилях.
                 </div>
               </div>
             </div>
@@ -607,6 +695,22 @@ function SubDetailModal({
                   {daysLeft()} дней
                 </span>
               </div>
+
+              {visibleAccountFields.length > 0 && (
+                <div className="pt-3 border-t border-slate-700/50 space-y-2">
+                  <div className="text-xs text-slate-400 uppercase">
+                    {getAccountFieldsTitle(sub)}
+                  </div>
+                  {visibleAccountFields.map(field => (
+                    <div key={field.label} className="flex justify-between gap-3">
+                      <span className="text-slate-400">{field.label}:</span>
+                      <span className="text-white font-mono text-xs text-right break-all">
+                        {field.value}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
 
@@ -616,26 +720,6 @@ function SubDetailModal({
             <div className="font-mono text-teal-400 font-semibold">{getSerialNumber()}</div>
           </div>
 
-          {/* Account Data - только для персональных аккаунтов */}
-          {sub.accountType === 'PERSONAL' && (
-            <div className="bg-slate-800/30 p-4 rounded-lg border border-slate-700/50">
-              <div className="text-xs text-slate-500 uppercase mb-3">Данные аккаунта</div>
-              <div className="space-y-2 text-sm">
-                <div className="flex justify-between">
-                  <span className="text-slate-400">Email:</span>
-                  <span className="text-white font-mono text-xs">{sub.client?.emailLogin || '—'}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-slate-400">Пароль почты:</span>
-                  <span className="text-white font-mono text-xs">{sub.client?.emailPassword || '—'}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-slate-400">Пароль аккаунта:</span>
-                  <span className="text-white font-mono text-xs">{sub.client?.accountPassword || '—'}</span>
-                </div>
-              </div>
-            </div>
-          )}
         </div>
 
         <div className="mt-6 flex flex-col md:flex-row items-stretch md:items-center justify-end gap-3">
@@ -653,6 +737,263 @@ function SubDetailModal({
           )}
           <button className="btn-secondary order-1 md:order-2" onClick={onClose}>
             Закрыть
+          </button>
+        </div>
+      </motion.div>
+    </div>
+  );
+}
+
+function formatInputDate(date: Date) {
+  return [
+    date.getFullYear(),
+    String(date.getMonth() + 1).padStart(2, '0'),
+    String(date.getDate()).padStart(2, '0'),
+  ].join('-');
+}
+
+function addPeriod(dateString: string, period: 'MONTH' | 'THREE_MONTHS' | 'YEAR') {
+  const base = new Date(`${dateString}T12:00:00`);
+  if (Number.isNaN(base.getTime())) {
+    return formatInputDate(new Date());
+  }
+
+  const next = new Date(base);
+  if (period === 'MONTH') next.setMonth(next.getMonth() + 1);
+  if (period === 'THREE_MONTHS') next.setMonth(next.getMonth() + 3);
+  if (period === 'YEAR') next.setFullYear(next.getFullYear() + 1);
+  return formatInputDate(next);
+}
+
+function toIsoDate(dateString: string, endOfDay = false) {
+  const suffix = endOfDay ? 'T23:59:59.000Z' : 'T00:00:00.000Z';
+  return new Date(`${dateString}${suffix}`).toISOString();
+}
+
+function CreateSubscriptionModal({
+  clients,
+  onClose,
+  onCreated,
+}: {
+  clients: ClientOption[];
+  onClose: () => void;
+  onCreated: () => Promise<void>;
+}) {
+  const today = formatInputDate(new Date());
+  const [saving, setSaving] = useState(false);
+  const [clientId, setClientId] = useState<number>(0);
+  const [type, setType] = useState<'PS_PLUS' | 'GAME_PASS' | 'EA_PLAY'>('GAME_PASS');
+  const [subscriptionPeriod, setSubscriptionPeriod] = useState<'MONTH' | 'THREE_MONTHS' | 'YEAR'>('MONTH');
+  const [startDate, setStartDate] = useState(today);
+  const [endDate, setEndDate] = useState(addPeriod(today, 'MONTH'));
+  const [consoleType, setConsoleType] = useState('Xbox');
+  const [emailLogin, setEmailLogin] = useState('');
+  const [emailPassword, setEmailPassword] = useState('');
+  const [accountPassword, setAccountPassword] = useState('');
+
+  const selectedClient = clients.find(item => item.id === clientId) || null;
+
+  useEffect(() => {
+    if (!selectedClient) return;
+    setConsoleType(selectedClient.consoleType || consoleType);
+    setEmailLogin(selectedClient.emailLogin || '');
+    setEmailPassword(selectedClient.emailPassword || '');
+    setAccountPassword(selectedClient.accountPassword || '');
+  }, [selectedClient]);
+
+  const submit = async () => {
+    if (!clientId) {
+      toast.error('Выберите клиента');
+      return;
+    }
+    if (!emailLogin.trim() || !emailPassword.trim()) {
+      toast.error('Укажите логин и пароль аккаунта');
+      return;
+    }
+    if (!startDate || !endDate) {
+      toast.error('Укажите срок подписки');
+      return;
+    }
+    if (new Date(`${endDate}T23:59:59`).getTime() <= new Date(`${startDate}T00:00:00`).getTime()) {
+      toast.error('Дата окончания должна быть позже даты начала');
+      return;
+    }
+
+    setSaving(true);
+    try {
+      await fetchWithAuth('/api/subscriptions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          clientId,
+          type,
+          startDate: toIsoDate(startDate),
+          endDate: toIsoDate(endDate, true),
+          status: 'ACTIVE',
+          accountType: 'PERSONAL',
+          subscriptionPeriod,
+          consoleType: consoleType.trim() || undefined,
+          emailLogin: emailLogin.trim(),
+          emailPassword: emailPassword.trim(),
+          accountPassword: accountPassword.trim() || undefined,
+        }),
+      });
+
+      toast.success('Подписка добавлена');
+      await onCreated();
+    } catch (error: any) {
+      toast.error(error?.message || 'Не удалось создать подписку');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 md:p-0">
+      <motion.div
+        className="absolute inset-0 bg-black/70 backdrop-blur-sm"
+        onClick={onClose}
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+      />
+      <motion.div
+        className="glass relative w-full max-w-2xl p-4 md:p-6 max-h-[90vh] overflow-y-auto"
+        initial={{ scale: 0.94, opacity: 0 }}
+        animate={{ scale: 1, opacity: 1 }}
+      >
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <div className="text-xl font-bold text-white">Новая подписка</div>
+            <div className="text-sm text-slate-400 mt-1">
+              Создание персональной подписки с логином, паролем и сроком действия.
+            </div>
+          </div>
+          <button
+            onClick={onClose}
+            className="p-2 rounded-lg bg-slate-700/50 hover:bg-slate-600/50 transition"
+          >
+            <Trash2 className="w-5 h-5" />
+          </button>
+        </div>
+
+        <div className="mt-6 grid gap-4 md:grid-cols-2">
+          <label className="space-y-2 md:col-span-2">
+            <span className="text-sm text-slate-300">Клиент</span>
+            <select
+              className="w-full rounded-lg bg-slate-800/50 border border-slate-600/50 px-3 py-2.5"
+              value={clientId}
+              onChange={(e) => setClientId(Number(e.target.value))}
+            >
+              <option value={0}>Выберите клиента</option>
+              {clients.map(client => (
+                <option key={client.id} value={client.id}>
+                  {client.name} ({client.phone})
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label className="space-y-2">
+            <span className="text-sm text-slate-300">Тип подписки</span>
+            <select
+              className="w-full rounded-lg bg-slate-800/50 border border-slate-600/50 px-3 py-2.5"
+              value={type}
+              onChange={(e) => setType(e.target.value as any)}
+            >
+              <option value="PS_PLUS">PlayStation Plus</option>
+              <option value="GAME_PASS">Xbox Ultimate Game Pass</option>
+              <option value="EA_PLAY">EA Play</option>
+            </select>
+          </label>
+
+          <label className="space-y-2">
+            <span className="text-sm text-slate-300">Период</span>
+            <select
+              className="w-full rounded-lg bg-slate-800/50 border border-slate-600/50 px-3 py-2.5"
+              value={subscriptionPeriod}
+              onChange={(e) => {
+                const next = e.target.value as 'MONTH' | 'THREE_MONTHS' | 'YEAR';
+                setSubscriptionPeriod(next);
+                setEndDate(addPeriod(startDate, next));
+              }}
+            >
+              <option value="MONTH">1 месяц</option>
+              <option value="THREE_MONTHS">3 месяца</option>
+              <option value="YEAR">1 год</option>
+            </select>
+          </label>
+
+          <label className="space-y-2">
+            <span className="text-sm text-slate-300">Дата начала</span>
+            <input
+              type="date"
+              className="w-full rounded-lg bg-slate-800/50 border border-slate-600/50 px-3 py-2.5"
+              value={startDate}
+              onChange={(e) => {
+                setStartDate(e.target.value);
+                setEndDate(addPeriod(e.target.value, subscriptionPeriod));
+              }}
+            />
+          </label>
+
+          <label className="space-y-2">
+            <span className="text-sm text-slate-300">Дата окончания</span>
+            <input
+              type="date"
+              className="w-full rounded-lg bg-slate-800/50 border border-slate-600/50 px-3 py-2.5"
+              value={endDate}
+              onChange={(e) => setEndDate(e.target.value)}
+            />
+          </label>
+
+          <label className="space-y-2 md:col-span-2">
+            <span className="text-sm text-slate-300">Платформа / консоль</span>
+            <input
+              className="w-full rounded-lg bg-slate-800/50 border border-slate-600/50 px-3 py-2.5"
+              value={consoleType}
+              onChange={(e) => setConsoleType(e.target.value)}
+              placeholder="Например: Xbox Series X / PS5 / Steam Deck"
+            />
+          </label>
+
+          <label className="space-y-2 md:col-span-2">
+            <span className="text-sm text-slate-300">Логин аккаунта</span>
+            <input
+              className="w-full rounded-lg bg-slate-800/50 border border-slate-600/50 px-3 py-2.5"
+              value={emailLogin}
+              onChange={(e) => setEmailLogin(e.target.value)}
+              placeholder="user@email.com"
+            />
+          </label>
+
+          <label className="space-y-2">
+            <span className="text-sm text-slate-300">Пароль аккаунта</span>
+            <input
+              className="w-full rounded-lg bg-slate-800/50 border border-slate-600/50 px-3 py-2.5"
+              value={emailPassword}
+              onChange={(e) => setEmailPassword(e.target.value)}
+              placeholder="Пароль от аккаунта / почты"
+            />
+          </label>
+
+          <label className="space-y-2">
+            <span className="text-sm text-slate-300">Пароль профиля</span>
+            <input
+              className="w-full rounded-lg bg-slate-800/50 border border-slate-600/50 px-3 py-2.5"
+              value={accountPassword}
+              onChange={(e) => setAccountPassword(e.target.value)}
+              placeholder="Дополнительно, если нужен"
+            />
+          </label>
+        </div>
+
+        <div className="mt-6 flex flex-col-reverse gap-3 md:flex-row md:justify-end">
+          <button className="btn-secondary" onClick={onClose} disabled={saving}>
+            Отмена
+          </button>
+          <button className="btn-primary flex items-center justify-center gap-2" onClick={submit} disabled={saving}>
+            <Plus className="w-4 h-4" />
+            {saving ? 'Сохраняем...' : 'Создать подписку'}
           </button>
         </div>
       </motion.div>

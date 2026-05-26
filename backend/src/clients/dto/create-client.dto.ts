@@ -1,4 +1,4 @@
-import { IsString, IsOptional, IsPhoneNumber, MaxLength, MinLength } from 'class-validator';
+import { IsBoolean, IsOptional, IsString, MaxLength, MinLength } from 'class-validator';
 
 export class CreateClientDto {
   @IsString()
@@ -40,4 +40,23 @@ export class CreateClientDto {
   @IsString()
   @MaxLength(100)
   accountPassword?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(64)
+  telegramId?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(64)
+  vkId?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(64)
+  maxId?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  marketingConsent?: boolean;
 }

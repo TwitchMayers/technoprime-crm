@@ -5,6 +5,7 @@ import { DollarSign, ShoppingCart, TrendingUp, BarChart3 } from 'lucide-react';
 import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, CartesianGrid, PieChart, Pie, Cell, BarChart, Bar } from 'recharts';
 import { toast } from 'sonner';
 import KpiCard from '@/components/dashboard/KpiCard';
+import { fetchWithAuth } from '@/lib/fetchWithAuth';
 
 type Overview = {
   totals: { ordersClosed:number; revenue:number; cost:number; profit:number; adSpend:number; netProfit:number };
@@ -31,10 +32,10 @@ export default function DashboardPage() {
   const loadAll = async () => {
     const qs = new URLSearchParams(); if (from) qs.set('from', from); if (to) qs.set('to', to);
     const [overview, employees, salesByAds, season] = await Promise.all([
-      fetch(`/api/analytics/overview?${qs}`).then(r=>r.json()).catch(()=>null),
-      fetch(`/api/analytics/employees?${qs}`).then(r=>r.json()).catch(()=>[]),
-      fetch(`/api/analytics/sales-by-ads?${qs}`).then(r=>r.json()).catch(()=>[]),
-      fetch(`/api/analytics/seasonality`).then(r=>r.json()).catch(()=>[]),
+      fetchWithAuth(`/api/analytics/overview?${qs}`).then(r=>r.json()).catch(()=>null),
+      fetchWithAuth(`/api/analytics/employees?${qs}`).then(r=>r.json()).catch(()=>[]),
+      fetchWithAuth(`/api/analytics/sales-by-ads?${qs}`).then(r=>r.json()).catch(()=>[]),
+      fetchWithAuth('/api/analytics/seasonality').then(r=>r.json()).catch(()=>[]),
     ]);
     setOv(overview);
     setEmps(employees || []);
@@ -45,7 +46,7 @@ export default function DashboardPage() {
 
   const loadAdSpendDay = async () => {
     const date = (new Date()).toISOString().slice(0,10);
-    const data = await fetch(`/api/ad-spend?from=${date}&to=${date}`).then(r=>r.json()).catch(()=>[]);
+    const data = await fetchWithAuth(`/api/ad-spend?from=${date}&to=${date}`).then(r=>r.json()).catch(()=>[]);
     const map = new Map<string,any>();
     (data||[]).forEach((r:any)=>map.set(r.adSku,r));
     setAdRows(AD_SKUS.map(s=>{
@@ -58,7 +59,7 @@ export default function DashboardPage() {
     const date = (new Date()).toISOString().slice(0,10);
     const amt = Number((r.amount||'').replace(',', '.')) || 0;
     const body = { date, adSku: r.adSku, amount: amt, note: r.note };
-    const res = await fetch('/api/ad-spend', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) });
+    const res = await fetchWithAuth('/api/ad-spend', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) });
     if (!res.ok) { toast.error('Ошибка сохранения'); return; }
     toast.success('Сохранено');
     await loadAll();

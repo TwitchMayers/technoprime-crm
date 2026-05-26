@@ -3,13 +3,38 @@ import { PassportStrategy } from '@nestjs/passport';
 import { ExtractJwt, Strategy } from 'passport-jwt';
 import { PrismaService } from '../prisma.service';
 
+function extractTokenFromCookie(request: any) {
+  const header = String(request?.headers?.cookie || '');
+  if (!header) return null;
+  const part = header
+    .split(';')
+    .map((entry: string) => entry.trim())
+    .find((entry: string) => entry.startsWith('token='));
+  if (!part) return null;
+  const raw = part.slice('token='.length);
+  if (!raw) return null;
+  try {
+    return decodeURIComponent(raw);
+  } catch {
+    return raw;
+  }
+}
+
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy) {
   constructor(private prisma: PrismaService) {
+    const secret = String(process.env.JWT_SECRET || '').trim();
+    if (!secret) {
+      throw new Error('JWT_SECRET is required');
+    }
+
     super({
-      jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
+      jwtFromRequest: ExtractJwt.fromExtractors([
+        ExtractJwt.fromAuthHeaderAsBearerToken(),
+        extractTokenFromCookie,
+      ]),
       ignoreExpiration: false,
-      secretOrKey: process.env.JWT_SECRET || 'DEV_SECRET_DO_NOT_USE_IN_PROD',
+      secretOrKey: secret,
     });
   }
 
@@ -27,10 +52,11 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
         role: true,
         position: true,
         tenant: true,
+        isActive: true,
       },
     });
 
-    if (!user) {
+    if (!user || !user.isActive) {
       throw new UnauthorizedException('User not found');
     }
 

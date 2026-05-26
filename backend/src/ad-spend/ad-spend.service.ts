@@ -18,7 +18,13 @@ export class AdSpendService {
     return new Prisma.Decimal(d.toFixed(2));
   }
 
-  async upsert(body: { date?: string; adSku: AdSku; amount: number; note?: string; createdById?: number }) {
+  async upsert(body: {
+    date?: string;
+    adSku: AdSku;
+    amount: number;
+    note?: string;
+    createdById?: number;
+  }) {
     if (!body?.adSku) throw new BadRequestException('adSku required');
     const date = normalizeDate(body.date);
     const amount = this.money(body.amount || 0);
@@ -30,7 +36,13 @@ export class AdSpendService {
       });
     }
     return this.prisma.adSpend.create({
-      data: { date, adSku: body.adSku, amount, note: body.note ?? undefined, createdById: body.createdById ?? undefined },
+      data: {
+        date,
+        adSku: body.adSku,
+        amount,
+        note: body.note ?? undefined,
+        createdById: body.createdById ?? undefined,
+      },
     });
   }
 

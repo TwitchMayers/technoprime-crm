@@ -7,6 +7,7 @@ import {
   Trash,
   Phone,
   MapPin,
+  Gamepad2,
   Play,
   StopCircle,
   Shield,
@@ -15,19 +16,32 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import Link from 'next/link';
+import { type SharingConsoleType } from '@/lib/sharing';
 
 type Subscription = {
   id: number;
   type: string;
   endDate: string;
   status: string;
-  accountType?: 'PERSONAL' | 'SHARING_CLIENT';
+  accountType?: 'PERSONAL' | 'SHARING_CLIENT' | 'SHARING_DONOR';
+  clientSlot?: {
+    endDate?: string | null;
+    sharingSystem?: {
+      donor?: {
+        endDate?: string | null;
+      };
+    };
+  };
+  donorAccount?: {
+    endDate?: string | null;
+  };
   sharingSystem?: {
     id: number;
     name: string;
     donor: {
       email: string;
-      consoleType: 'PS4' | 'PS5';
+	      consoleType: SharingConsoleType;
+      endDate?: string | null;
     };
   };
 };
@@ -44,11 +58,54 @@ type Client = {
 };
 
 const getActiveSubscription = (client: Client) => {
-  return client.subscriptions?.find((s) => s.status === 'ACTIVE') || null;
+  const active = client.subscriptions?.filter((s) => s.status === 'ACTIVE') || [];
+  if (!active.length) return null;
+
+  return active.sort(
+    (left, right) =>
+      getSubscriptionEffectiveEndTime(right) - getSubscriptionEffectiveEndTime(left),
+  )[0] || null;
 };
 
-const daysLeft = (endDate: string) => {
+const parseDateTime = (value?: string | null) => {
+  if (!value) return null;
+  const time = new Date(value).getTime();
+  return Number.isFinite(time) ? time : null;
+};
+
+const getSubscriptionEffectiveEndTime = (sub: Subscription | null) => {
+  if (!sub) return 0;
+
+  const candidates =
+    sub.accountType === 'SHARING_CLIENT'
+      ? [
+          sub.endDate,
+          sub.clientSlot?.endDate,
+          sub.clientSlot?.sharingSystem?.donor?.endDate && !sub.clientSlot?.endDate
+            ? sub.clientSlot.sharingSystem.donor.endDate
+            : null,
+          sub.donorAccount?.endDate && !sub.clientSlot?.endDate ? sub.donorAccount.endDate : null,
+        ]
+      : sub.accountType === 'SHARING_DONOR'
+        ? [
+            sub.endDate,
+            sub.donorAccount?.endDate,
+            sub.clientSlot?.sharingSystem?.donor?.endDate,
+            sub.sharingSystem?.donor?.endDate,
+          ]
+        : [sub.endDate];
+
+  return Math.max(0, ...candidates.map(parseDateTime).filter((time): time is number => time !== null));
+};
+
+const getSubscriptionEffectiveEndDate = (sub: Subscription | null) => {
+  const time = getSubscriptionEffectiveEndTime(sub);
+  return time > 0 ? new Date(time).toISOString() : null;
+};
+
+const daysLeft = (endDate?: string | null) => {
   try {
+    if (!endDate) return 'Ошибка даты';
     const end = new Date(endDate);
     const now = new Date();
     const diff = Math.ceil(
@@ -62,8 +119,9 @@ const daysLeft = (endDate: string) => {
   }
 };
 
-const getStatusColor = (endDate: string) => {
+const getStatusColor = (endDate?: string | null) => {
   try {
+    if (!endDate) return 'text-slate-400 bg-slate-500/20 border-slate-500/30';
     const end = new Date(endDate);
     const now = new Date();
     const diff = Math.ceil(
@@ -89,7 +147,8 @@ export function ClientCardExpanded({
 }) {
   const [expanded, setExpanded] = useState(false);
   const sub = getActiveSubscription(client);
-  const isExpired = sub && new Date(sub.endDate) < new Date();
+  const effectiveEndDate = getSubscriptionEffectiveEndDate(sub);
+  const isExpired = Boolean(effectiveEndDate && new Date(effectiveEndDate) < new Date());
 
   return (
     <motion.div
@@ -139,9 +198,11 @@ export function ClientCardExpanded({
             {/* Консоль */}
             {client.consoleType && (
               <div className="flex items-center gap-1.5 px-2 py-1 rounded-lg bg-slate-800/50 border border-slate-700/50">
-                {client.consoleType.includes('PS5') ? (
-                  <Play className="w-3.5 h-3.5 text-cyan-400" />
-                ) : (
+	                {client.consoleType.toLowerCase().includes('xbox') ? (
+	                  <Gamepad2 className="w-3.5 h-3.5 text-emerald-400" />
+	                ) : client.consoleType.includes('PS5') ? (
+	                  <Play className="w-3.5 h-3.5 text-cyan-400" />
+	                ) : (
                   <StopCircle className="w-3.5 h-3.5 text-blue-400" />
                 )}
                 <span className="text-xs font-medium text-slate-300 whitespace-nowrap">
@@ -154,7 +215,7 @@ export function ClientCardExpanded({
             {sub && (
               <div
                 className={`px-2 py-1 rounded-lg text-xs font-bold border flex items-center gap-1 ${getStatusColor(
-                  sub.endDate
+                  effectiveEndDate
                 )}`}
               >
                 {isExpired ? (
@@ -165,7 +226,7 @@ export function ClientCardExpanded({
                 ) : (
                   <>
                     <Shield className="w-3 h-3" />
-                    {daysLeft(sub.endDate)}
+                    {daysLeft(effectiveEndDate)}
                   </>
                 )}
               </div>
@@ -226,7 +287,7 @@ export function ClientCardExpanded({
                           isExpired ? 'text-rose-400' : 'text-teal-400'
                         }`}
                       >
-                        {new Date(sub.endDate).toLocaleDateString('ru')}
+                        {effectiveEndDate ? new Date(effectiveEndDate).toLocaleDateString('ru') : '—'}
                       </span>
                     </div>
 

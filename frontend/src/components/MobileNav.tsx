@@ -1,20 +1,25 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { usePathname } from 'next/navigation';
 import Link from 'next/link';
-import { Menu, X, LogOut, LayoutDashboard, Users, Package, ShoppingCart, ListTodo, CreditCard, Share2 } from 'lucide-react';
+import { Menu, X, LogOut, Users, Package, ShoppingCart, ListTodo, CreditCard, Share2, MessageCircle, Settings, Truck, BarChart3, BookOpen } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { motion, AnimatePresence } from 'framer-motion';
 
 const menuItems = [
-  { href: '/dashboard', label: 'Дашборд', icon: LayoutDashboard, roles: ['ADMIN', 'SUPER_ADMIN'] },
   { href: '/clients', label: 'Клиенты', icon: Users, roles: ['ADMIN', 'MANAGER', 'SUPER_ADMIN'] },
   { href: '/products', label: 'Товары', icon: Package, roles: ['ADMIN', 'MANAGER', 'TECHNICAL_SPECIALIST', 'SUPER_ADMIN'] },
   { href: '/orders', label: 'Заказы', icon: ShoppingCart, roles: ['ADMIN', 'MANAGER', 'SUPER_ADMIN'] },
+  { href: '/logistics', label: 'Логистика', icon: Truck, roles: ['ADMIN', 'MANAGER', 'SUPER_ADMIN'] },
   { href: '/tasks', label: 'Задачи', icon: ListTodo, roles: ['ADMIN', 'TECHNICAL_SPECIALIST', 'SUPER_ADMIN'] },
   { href: '/subscriptions', label: 'Подписки', icon: CreditCard, roles: ['ADMIN', 'MANAGER', 'SUPER_ADMIN'] },
+  { href: '/communication-center', label: 'Коммуникации', icon: MessageCircle, roles: ['ADMIN', 'MANAGER', 'SUPER_ADMIN'] },
+  { href: '/sales-memo', label: 'Памятка', icon: BookOpen, roles: ['ADMIN', 'MANAGER', 'SUPER_ADMIN'] },
+  { href: '/analytics', label: 'Аналитика', icon: BarChart3, roles: ['ADMIN', 'SUPER_ADMIN'] },
+  { href: '/team', label: 'Команда', icon: Users, roles: ['ADMIN', 'SUPER_ADMIN'] },
   { href: '/sharing-systems', label: 'Шеринг', icon: Share2, roles: ['ADMIN', 'MANAGER', 'SUPER_ADMIN'] },
+  { href: '/settings', label: 'Настройки', icon: Settings, roles: ['ADMIN', 'SUPER_ADMIN'] },
 ];
 
 export default function MobileNav() {
@@ -33,6 +38,20 @@ export default function MobileNav() {
     await authLogout();
   }, [handleClose, authLogout]);
 
+  useEffect(() => {
+    if (!isOpen) return undefined;
+
+    const prevBodyOverflow = document.body.style.overflow;
+    const prevHtmlOverflow = document.documentElement.style.overflow;
+    document.body.style.overflow = 'hidden';
+    document.documentElement.style.overflow = 'hidden';
+
+    return () => {
+      document.body.style.overflow = prevBodyOverflow;
+      document.documentElement.style.overflow = prevHtmlOverflow;
+    };
+  }, [isOpen]);
+
   if (!user || pathname === '/login' || pathname === '/register') {
     return null;
   }
@@ -45,7 +64,8 @@ export default function MobileNav() {
     <>
       {/* Hamburger Button - ВСЕГДА на top */}
       <motion.button
-        className="fixed top-4 left-4 z-[60] p-3 rounded-xl glass backdrop-blur-2xl shadow-2xl md:hidden hover:bg-slate-700/50 transition"
+        className="fixed left-3 z-[60] flex h-10 w-10 items-center justify-center rounded-2xl border border-slate-700/70 bg-slate-950/84 shadow-2xl backdrop-blur-2xl transition hover:bg-slate-800/88 md:hidden sm:left-4"
+        style={{ top: 'calc(env(safe-area-inset-top) + 0.5rem)' }}
         onClick={() => setIsOpen(!isOpen)}
         whileTap={{ scale: 0.95 }}
         type="button"
@@ -76,15 +96,15 @@ export default function MobileNav() {
       <AnimatePresence>
         {isOpen && (
           <motion.nav
-            className="fixed inset-y-0 left-0 w-80 max-w-[90vw] bg-gradient-to-b from-slate-900 via-slate-800 to-slate-900 border-r border-slate-700/50 shadow-2xl z-[50] md:hidden flex flex-col overflow-y-auto"
+            className="fixed inset-y-0 left-0 z-[50] flex w-[min(88vw,340px)] flex-col overflow-y-auto border-r border-slate-700/50 bg-gradient-to-b from-slate-900 via-slate-800 to-slate-900 shadow-2xl md:hidden"
             initial={{ x: -320 }}
             animate={{ x: 0 }}
             exit={{ x: -320 }}
             transition={{ type: 'spring', damping: 25, stiffness: 200 }}
           >
             {/* Header */}
-            <div className="p-6 border-b border-slate-700/50 bg-gradient-to-br from-purple-900/20 to-teal-900/20 flex-shrink-0">
-              <div className="font-bold text-2xl bg-gradient-to-r from-purple-400 to-teal-400 bg-clip-text text-transparent">
+            <div className="flex-shrink-0 border-b border-slate-700/50 bg-gradient-to-br from-purple-900/20 to-teal-900/20 px-5 pb-3.5 pt-[calc(env(safe-area-inset-top)+0.95rem)]">
+              <div className="bg-gradient-to-r from-purple-400 to-teal-400 bg-clip-text text-2xl font-bold text-transparent">
                 TechnoPrime
               </div>
               <div className="text-xs text-slate-400 mt-1">CRM System</div>
@@ -94,7 +114,7 @@ export default function MobileNav() {
             </div>
 
             {/* Menu Items - scrollable */}
-            <div className="flex-1 p-4 space-y-2 overflow-y-auto">
+            <div className="flex-1 p-3.5 space-y-1.5 overflow-y-auto">
               {visibleItems.map((item, idx) => {
                 const Icon = item.icon;
                 const isActive = pathname === item.href;
@@ -108,7 +128,7 @@ export default function MobileNav() {
                     <Link
                       href={item.href}
                       onClick={handleClose}
-                      className={`flex items-center gap-4 px-4 py-4 rounded-xl transition-all active:scale-95 ${
+                      className={`flex items-center gap-3.5 px-4 py-3.5 rounded-xl transition-all active:scale-95 ${
                         isActive
                           ? 'bg-gradient-to-r from-purple-600 to-teal-600 shadow-lg shadow-purple-500/30 text-white'
                           : 'bg-slate-800/30 hover:bg-slate-700/50 text-slate-300 hover:text-white'

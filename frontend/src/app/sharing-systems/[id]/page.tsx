@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { 
-  ArrowLeft, Users, Calendar, Mail, Key, Play, StopCircle, 
+  ArrowLeft, Users, Calendar, Mail, Key,
   AlertTriangle, Clock, Trash2, Globe, Shield, Copy, 
   Edit, ExternalLink, Hash, Battery, QrCode, Zap, Activity
 } from 'lucide-react';
@@ -11,6 +11,7 @@ import Link from 'next/link';
 import { toast } from 'sonner';
 import { motion } from 'framer-motion';
 import { fetchWithAuth } from '@/lib/fetchWithAuth';
+import { getSharingConsoleMeta, getSharingSlotTypes, getSlotStat, type SharingConsoleType } from '@/lib/sharing';
 
 type ClientSlot = {
   id: number;
@@ -20,7 +21,7 @@ type ClientSlot = {
     name: string;
     phone: string;
   };
-  consoleType: 'PS4' | 'PS5';
+  consoleType: SharingConsoleType;
   emailLogin?: string;
   emailPassword?: string;
   accountPassword?: string;
@@ -34,7 +35,7 @@ type DonorAccount = {
   id: number;
   email: string;
   password: string;
-  consoleType: 'PS4' | 'PS5';
+  consoleType: SharingConsoleType;
   startDate: string;
   endDate: string;
   subscriptionType: string;
@@ -68,6 +69,16 @@ type SharingSystem = {
       available: number;
     };
     ps4: {
+      used: number;
+      max: number;
+      available: number;
+    };
+    xbox1?: {
+      used: number;
+      max: number;
+      available: number;
+    };
+    xbox2?: {
       used: number;
       max: number;
       available: number;
@@ -252,18 +263,20 @@ export default function SharingSystemDetailPage() {
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
               {/* Console Type */}
-              <div className="p-4 rounded-xl bg-slate-800/50 border border-slate-600/50">
-                <div className="flex items-center gap-2 mb-3">
-                  {system.donor.consoleType === 'PS5' ? (
-                    <Play className="w-6 h-6 text-teal-400" />
-                  ) : (
-                    <StopCircle className="w-6 h-6 text-blue-400" />
-                  )}
-                  <div>
-                    <div className="text-xs text-slate-400">Консоль</div>
-                    <div className="font-bold text-white">PS{system.donor.consoleType === 'PS5' ? '5' : '4'}</div>
-                  </div>
-                </div>
+	              <div className="p-4 rounded-xl bg-slate-800/50 border border-slate-600/50">
+	                <div className="flex items-center gap-2 mb-3">
+	                  {(() => {
+	                    const meta = getSharingConsoleMeta(system.donor.consoleType);
+	                    const Icon = meta.icon;
+	                    return <Icon className={`h-6 w-6 ${meta.textClass}`} />;
+	                  })()}
+	                  <div>
+	                    <div className="text-xs text-slate-400">Консоль</div>
+	                    <div className="font-bold text-white">
+	                      {system.donor.consoleType.startsWith('XBOX') ? 'Xbox' : getSharingConsoleMeta(system.donor.consoleType).label}
+	                    </div>
+	                  </div>
+	                </div>
                 <div className="text-sm text-slate-300">{system.donor.subscriptionType}</div>
               </div>
 
@@ -414,13 +427,9 @@ export default function SharingSystemDetailPage() {
                           <div className="font-semibold text-white truncate">
                             {slot.client?.name || `Клиент #${slot.clientId}`}
                           </div>
-                          <div className={`px-2 py-0.5 rounded text-xs font-bold whitespace-nowrap ${
-                            slot.consoleType === 'PS5' 
-                              ? 'bg-teal-500/20 text-teal-400' 
-                              : 'bg-blue-500/20 text-blue-400'
-                          }`}>
-                            {slot.consoleType}
-                          </div>
+	                          <div className={`whitespace-nowrap rounded px-2 py-0.5 text-xs font-bold ${getSharingConsoleMeta(slot.consoleType).badgeClass}`}>
+	                            {getSharingConsoleMeta(slot.consoleType).label}
+	                          </div>
                         </div>
                         <div className="text-sm text-slate-400 mb-2">
                           {slot.client?.phone || 'Нет номера'}
@@ -506,37 +515,27 @@ export default function SharingSystemDetailPage() {
                 </div>
               </div>
 
-              {/* PS5 */}
-              <div className="p-3 rounded-lg bg-slate-800/30 border border-slate-600/50">
-                <div className="flex items-center justify-between mb-2">
-                  <div className="flex items-center gap-1.5 text-sm text-slate-400">
-                    <Play className="w-4 h-4 text-teal-400" />
-                    PS5
+              {getSharingSlotTypes(system.donor.consoleType).map((slotType) => {
+                const meta = getSharingConsoleMeta(slotType);
+                const Icon = meta.icon;
+                const stat = getSlotStat(system.slotStats, slotType);
+                return (
+                  <div key={slotType} className="rounded-lg border border-slate-600/50 bg-slate-800/30 p-3">
+                    <div className="mb-2 flex items-center justify-between">
+                      <div className="flex items-center gap-1.5 text-sm text-slate-400">
+                        <Icon className={`h-4 w-4 ${meta.textClass}`} />
+                        {meta.label}
+                      </div>
+                      <span className="text-sm font-semibold text-white">
+                        {stat.used}/{stat.max}
+                      </span>
+                    </div>
+                    <div className={`text-xs ${meta.textClass}`}>
+                      {stat.available} свободно
+                    </div>
                   </div>
-                  <span className="font-semibold text-white text-sm">
-                    {system.slotStats?.ps5?.used}/{system.slotStats?.ps5?.max}
-                  </span>
-                </div>
-                <div className="text-xs text-teal-400">
-                  {system.slotStats?.ps5?.available} свободно
-                </div>
-              </div>
-
-              {/* PS4 */}
-              <div className="p-3 rounded-lg bg-slate-800/30 border border-slate-600/50">
-                <div className="flex items-center justify-between mb-2">
-                  <div className="flex items-center gap-1.5 text-sm text-slate-400">
-                    <StopCircle className="w-4 h-4 text-blue-400" />
-                    PS4
-                  </div>
-                  <span className="font-semibold text-white text-sm">
-                    {system.slotStats?.ps4?.used}/{system.slotStats?.ps4?.max}
-                  </span>
-                </div>
-                <div className="text-xs text-blue-400">
-                  {system.slotStats?.ps4?.available} свободно
-                </div>
-              </div>
+                );
+              })}
 
               {/* Utilization */}
               <div className="p-3 rounded-lg bg-slate-800/30 border border-slate-600/50">

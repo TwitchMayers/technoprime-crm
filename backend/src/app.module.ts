@@ -1,4 +1,5 @@
 import { Module, Logger } from '@nestjs/common';
+import { APP_INTERCEPTOR } from '@nestjs/core';
 import { ConfigModule } from '@nestjs/config';
 import { ScheduleModule } from '@nestjs/schedule';
 import { AppController } from './app.controller';
@@ -19,41 +20,54 @@ import { AnalyticsModule } from './analytics/analytics.module';
 import { AdSpendModule } from './ad-spend/ad-spend.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { InventoryModule } from './inventory/inventory.module';
-
-// RichMarket modules
-import { RichMarketClientsModule } from './richmarket/clients/richmarket-clients.module';
-import { RichMarketProductsModule } from './richmarket/products/richmarket-products.module';
-import { RichMarketOrdersModule } from './richmarket/orders/richmarket-orders.module';
-import { RichMarketTasksModule } from './richmarket/tasks/richmarket-tasks.module';
+import { MarketingCampaignsModule } from './marketing-campaigns/marketing-campaigns.module';
+import { ShopModule } from './shop/shop.module';
+import { LogisticsModule } from './logistics/logistics.module';
+import { InstructionsModule } from './instructions/instructions.module';
+import { AuditLogInterceptor } from './common/interceptors/audit-log.interceptor';
 
 @Module({
   imports: [
-    ConfigModule.forRoot({ isGlobal: true }),
+    ConfigModule.forRoot({
+      isGlobal: true,
+      envFilePath:
+        process.env.NODE_ENV === 'production'
+          ? ['.env.production', '.env']
+          : ['.env.development', '.env'],
+    }),
     ScheduleModule.forRoot(),
     AuthModule,
     EmployeesModule,
     EventsModule,
-    
+
     // TechnoPrime modules - ВАЖНО: порядок может иметь значение
-    ClientsModule,           // Проверьте что этот модуль работает
-    ProductsModule,          // Проверьте что этот модуль работает  
-    OrdersModule,            // Проверьте что этот модуль работает
-    TasksModule,             // Проверьте что этот модуль работает
-    SubscriptionsModule,     // Проверьте что этот модуль работает
+    ClientsModule, // Проверьте что этот модуль работает
+    ProductsModule, // Проверьте что этот модуль работает
+    OrdersModule, // Проверьте что этот модуль работает
+    TasksModule, // Проверьте что этот модуль работает
+    SubscriptionsModule, // Проверьте что этот модуль работает
     AnalyticsModule,
     AdSpendModule,
     NotificationsModule,
     InventoryModule,
-    SharingSystemsModule,    // НОВЫЙ МОДУЛЬ - ДОЛЖЕН БЫТЬ ПОСЛЕДНИМ
-    
-    // RichMarket modules
-    RichMarketClientsModule,
-    RichMarketProductsModule,
-    RichMarketOrdersModule,
-    RichMarketTasksModule,
+    LogisticsModule,
+    MarketingCampaignsModule,
+    InstructionsModule,
+    SharingSystemsModule, // НОВЫЙ МОДУЛЬ - ДОЛЖЕН БЫТЬ ПОСЛЕДНИМ
+
+    // Public storefront API
+    ShopModule,
   ],
   controllers: [AppController],
-  providers: [AppService, PrismaService, Logger],
+  providers: [
+    AppService,
+    PrismaService,
+    Logger,
+    {
+      provide: APP_INTERCEPTOR,
+      useClass: AuditLogInterceptor,
+    },
+  ],
   exports: [PrismaService], // Экспортируем PrismaService для других модулей
 })
 export class AppModule {}

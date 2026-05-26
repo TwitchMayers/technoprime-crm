@@ -4,12 +4,19 @@ import { useState, useCallback, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { 
   ArrowLeft, Search, Users, Calendar, Mail, Key, 
-  Shield, Check, Play, StopCircle, UserPlus, Zap, Lock
+  Shield, Check, UserPlus, Zap, Lock
 } from 'lucide-react';
 import Link from 'next/link';
 import { toast } from 'sonner';
 import { motion } from 'framer-motion';
 import { fetchWithAuth } from '@/lib/fetchWithAuth';
+import {
+  getFirstAvailableSlotType,
+  getSharingConsoleMeta,
+  getSharingSlotTypes,
+  getSlotStat,
+  type SharingConsoleType,
+} from '@/lib/sharing';
 
 type Client = {
   id: number;
@@ -20,7 +27,7 @@ type Client = {
   clientSlots?: Array<{
     id: number;
     sharingSystemId: number;
-    consoleType: 'PS4' | 'PS5';
+	    consoleType: SharingConsoleType;
     isActive: boolean;
   }>;
 };
@@ -29,8 +36,9 @@ type SharingSystem = {
   id: number;
   name: string;
   donor: {
-    consoleType: 'PS4' | 'PS5';
+	    consoleType: SharingConsoleType;
     subscriptionType: string;
+    startDate: string;
     endDate: string;
   };
   slotStats: {
@@ -40,6 +48,16 @@ type SharingSystem = {
       available: number;
     };
     ps4: {
+      used: number;
+      max: number;
+      available: number;
+    };
+    xbox1?: {
+      used: number;
+      max: number;
+      available: number;
+    };
+    xbox2?: {
       used: number;
       max: number;
       available: number;
@@ -56,7 +74,7 @@ export default function AssignClientPage() {
   const [selectedClient, setSelectedClient] = useState<Client | null>(null);
   const [assigning, setAssigning] = useState(false);
   const [system, setSystem] = useState<SharingSystem | null>(null);
-  const [consoleType, setConsoleType] = useState<'PS4' | 'PS5'>('PS5');
+  const [consoleType, setConsoleType] = useState<SharingConsoleType>('PS5');
   const [formData, setFormData] = useState({
     startDate: new Date().toISOString().split('T')[0],
     endDate: new Date(new Date().setMonth(new Date().getMonth() + 1)).toISOString().split('T')[0],
@@ -66,16 +84,28 @@ export default function AssignClientPage() {
     notes: '',
   });
 
+  const toInputDate = (value?: string | null) => {
+    if (!value) return null;
+    const parsed = new Date(value);
+    if (Number.isNaN(parsed.getTime())) return null;
+    return parsed.toISOString().split('T')[0];
+  };
+
   const loadSystem = async () => {
     try {
       const data = await fetchWithAuth(`sharing-systems/${params.id}`);
       setSystem(data);
-      
-      if (data.slotStats?.ps5?.available > 0) {
-        setConsoleType('PS5');
-      } else if (data.slotStats?.ps4?.available > 0) {
-        setConsoleType('PS4');
+      const donorStart = toInputDate(data?.donor?.startDate);
+      const donorEnd = toInputDate(data?.donor?.endDate);
+      if (donorStart || donorEnd) {
+        setFormData((prev) => ({
+          ...prev,
+          startDate: donorStart || prev.startDate,
+          endDate: donorEnd || prev.endDate,
+        }));
       }
+
+      setConsoleType(getFirstAvailableSlotType(data?.donor?.consoleType, data?.slotStats));
     } catch (error) {
       console.error('Error loading system:', error);
       toast.error('Ошибка загрузки системы шеринга');
@@ -135,18 +165,23 @@ export default function AssignClientPage() {
       toast.error('Укажите даты начала и окончания');
       return;
     }
+    if (consoleType === 'XBOX_2' && (!formData.clientEmailLogin.trim() || !formData.clientEmailPassword.trim())) {
+      toast.error('Для Xbox #2 укажите логин и пароль личного аккаунта клиента');
+      return;
+    }
 
     setAssigning(true);
     try {
+      const xboxDonorSlot = consoleType === 'XBOX_1';
       const data = {
         sharingSystemId: Number(params.id),
         clientId: selectedClient.id,
         consoleType,
         startDate: formData.startDate,
         endDate: formData.endDate,
-        clientEmailLogin: formData.clientEmailLogin,
-        clientEmailPassword: formData.clientEmailPassword,
-        clientAccountPassword: formData.clientAccountPassword,
+        clientEmailLogin: xboxDonorSlot ? '' : formData.clientEmailLogin,
+        clientEmailPassword: xboxDonorSlot ? '' : formData.clientEmailPassword,
+        clientAccountPassword: xboxDonorSlot ? '' : formData.clientAccountPassword,
         notes: formData.notes,
       };
 
@@ -173,8 +208,12 @@ export default function AssignClientPage() {
     }
   };
 
-  const ps5Available = system?.slotStats?.ps5?.available || 0;
-  const ps4Available = system?.slotStats?.ps4?.available || 0;
+  const slotTypes = getSharingSlotTypes(system?.donor.consoleType);
+  const selectedAvailable = getSlotStat(system?.slotStats, consoleType).available;
+  const isXboxDonorSlot = consoleType === 'XBOX_1';
+  const isXboxPersonalSlot = consoleType === 'XBOX_2';
+  const accountSectionTitle = isXboxPersonalSlot ? 'Личный аккаунт клиента' : 'Учетные данные';
+  const accountSectionHint = isXboxPersonalSlot ? 'обязательно для Xbox #2' : 'опционально';
 
   return (
     <div className="space-y-6">
@@ -341,116 +380,63 @@ export default function AssignClientPage() {
               <h2 className="text-lg font-bold text-white">Выбор консоли и статус</h2>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-              {/* PS5 */}
-              <motion.button
-                whileHover={{ scale: 1.02 }}
-                onClick={() => setConsoleType('PS5')}
-                disabled={ps5Available === 0}
-                className={`relative p-6 rounded-xl border-2 transition-all ${
-                  consoleType === 'PS5'
-                    ? 'bg-gradient-to-br from-teal-500/25 to-teal-500/5 border-teal-500/80 ring-2 ring-teal-500/40'
-                    : 'bg-slate-800/30 border-slate-600/50 hover:border-slate-500/70'
-                } ${ps5Available === 0 ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
-              >
-                <div className="flex items-start justify-between mb-3">
-                  <div className="p-2.5 rounded-lg bg-gradient-to-br from-teal-500/30 to-teal-400/10">
-                    <Play className="w-5 h-5 text-teal-400" />
-                  </div>
-                  {consoleType === 'PS5' && (
-                    <motion.div
-                      initial={{ scale: 0 }}
-                      animate={{ scale: 1 }}
-                      className="p-1.5 rounded-full bg-teal-500/20 border border-teal-500/50"
-                    >
-                      <Check className="w-4 h-4 text-teal-400" />
-                    </motion.div>
-                  )}
-                </div>
-                
-                <div className="text-left">
-                  <div className="font-bold text-white text-lg mb-1">PlayStation 5</div>
-                  <div className="text-sm text-slate-400 mb-3">Следующее поколение</div>
-                  
-                  <div className="space-y-2 mb-3">
-                    <div className="flex items-center justify-between text-xs">
-                      <span className="text-slate-400">Слоты:</span>
-                      <span className="font-semibold text-white">
-                        {system?.slotStats?.ps5?.used || 0}/{system?.slotStats?.ps5?.max || 2}
-                      </span>
+            <div className="mb-6 grid grid-cols-1 gap-4 md:grid-cols-2">
+              {slotTypes.map((slotType) => {
+                const meta = getSharingConsoleMeta(slotType);
+                const Icon = meta.icon;
+                const stat = getSlotStat(system?.slotStats, slotType);
+                const disabled = stat.available === 0;
+                const progress = stat.max > 0 ? (stat.used / stat.max) * 100 : 0;
+                return (
+                  <motion.button
+                    key={slotType}
+                    whileHover={{ scale: disabled ? 1 : 1.02 }}
+                    onClick={() => setConsoleType(slotType)}
+                    disabled={disabled}
+                    className={`relative rounded-xl border-2 p-6 transition-all ${
+                      consoleType === slotType
+                        ? `bg-gradient-to-br from-slate-800/20 to-slate-950/20 ${meta.activeClass} ring-2 ring-white/10`
+                        : 'border-slate-600/50 bg-slate-800/30 hover:border-slate-500/70'
+                    } ${disabled ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'}`}
+                  >
+                    <div className="mb-3 flex items-start justify-between">
+                      <div className="rounded-lg bg-slate-900/50 p-2.5">
+                        <Icon className={`h-5 w-5 ${meta.textClass}`} />
+                      </div>
+                      {consoleType === slotType ? (
+                        <motion.div
+                          initial={{ scale: 0 }}
+                          animate={{ scale: 1 }}
+                          className="rounded-full border border-white/15 bg-white/10 p-1.5"
+                        >
+                          <Check className={`h-4 w-4 ${meta.textClass}`} />
+                        </motion.div>
+                      ) : null}
                     </div>
-                    <div className="w-full h-1.5 bg-slate-700/50 rounded-full overflow-hidden">
-                      <div 
-                        className="h-full bg-gradient-to-r from-teal-500 to-teal-400"
-                        style={{ width: `${((system?.slotStats?.ps5?.used || 0) / (system?.slotStats?.ps5?.max || 2)) * 100}%` }}
-                      ></div>
+                    <div className="text-left">
+                      <div className="mb-1 text-lg font-bold text-white">{meta.fullLabel}</div>
+                      <div className="mb-3 text-sm text-slate-400">{meta.description}</div>
+                      <div className="mb-3 space-y-2">
+                        <div className="flex items-center justify-between text-xs">
+                          <span className="text-slate-400">Слоты:</span>
+                          <span className="font-semibold text-white">{stat.used}/{stat.max}</span>
+                        </div>
+                        <div className="h-1.5 w-full overflow-hidden rounded-full bg-slate-700/50">
+                          <div
+                            className={`h-full bg-gradient-to-r ${meta.barClass}`}
+                            style={{ width: `${progress}%` }}
+                          />
+                        </div>
+                      </div>
+                      <div className={`rounded-lg px-3 py-1.5 text-center text-xs font-medium ${
+                        stat.available > 0 ? meta.badgeClass : 'bg-rose-500/20 text-rose-400'
+                      }`}>
+                        {stat.available > 0 ? `${stat.available} свободно` : 'Все заняты'}
+                      </div>
                     </div>
-                  </div>
-
-                  <div className={`px-3 py-1.5 rounded-lg text-xs font-medium text-center ${
-                    ps5Available > 0
-                      ? 'bg-teal-500/20 text-teal-400'
-                      : 'bg-rose-500/20 text-rose-400'
-                  }`}>
-                    {ps5Available > 0 ? `${ps5Available} свободных` : 'Все заняты'}
-                  </div>
-                </div>
-              </motion.button>
-
-              {/* PS4 */}
-              <motion.button
-                whileHover={{ scale: 1.02 }}
-                onClick={() => setConsoleType('PS4')}
-                disabled={ps4Available === 0}
-                className={`relative p-6 rounded-xl border-2 transition-all ${
-                  consoleType === 'PS4'
-                    ? 'bg-gradient-to-br from-blue-500/25 to-blue-500/5 border-blue-500/80 ring-2 ring-blue-500/40'
-                    : 'bg-slate-800/30 border-slate-600/50 hover:border-slate-500/70'
-                } ${ps4Available === 0 ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
-              >
-                <div className="flex items-start justify-between mb-3">
-                  <div className="p-2.5 rounded-lg bg-gradient-to-br from-blue-500/30 to-blue-400/10">
-                    <StopCircle className="w-5 h-5 text-blue-400" />
-                  </div>
-                  {consoleType === 'PS4' && (
-                    <motion.div
-                      initial={{ scale: 0 }}
-                      animate={{ scale: 1 }}
-                      className="p-1.5 rounded-full bg-blue-500/20 border border-blue-500/50"
-                    >
-                      <Check className="w-4 h-4 text-blue-400" />
-                    </motion.div>
-                  )}
-                </div>
-                
-                <div className="text-left">
-                  <div className="font-bold text-white text-lg mb-1">PlayStation 4</div>
-                  <div className="text-sm text-slate-400 mb-3">Предыдущее поколение</div>
-                  
-                  <div className="space-y-2 mb-3">
-                    <div className="flex items-center justify-between text-xs">
-                      <span className="text-slate-400">Слоты:</span>
-                      <span className="font-semibold text-white">
-                        {system?.slotStats?.ps4?.used || 0}/{system?.slotStats?.ps4?.max || 2}
-                      </span>
-                    </div>
-                    <div className="w-full h-1.5 bg-slate-700/50 rounded-full overflow-hidden">
-                      <div 
-                        className="h-full bg-gradient-to-r from-blue-500 to-blue-400"
-                        style={{ width: `${((system?.slotStats?.ps4?.used || 0) / (system?.slotStats?.ps4?.max || 2)) * 100}%` }}
-                      ></div>
-                    </div>
-                  </div>
-
-                  <div className={`px-3 py-1.5 rounded-lg text-xs font-medium text-center ${
-                    ps4Available > 0
-                      ? 'bg-blue-500/20 text-blue-400'
-                      : 'bg-rose-500/20 text-rose-400'
-                  }`}>
-                    {ps4Available > 0 ? `${ps4Available} свободных` : 'Все заняты'}
-                  </div>
-                </div>
-              </motion.button>
+                  </motion.button>
+                );
+              })}
             </div>
 
             {/* Информация донора */}
@@ -459,19 +445,18 @@ export default function AssignClientPage() {
               <div className="grid grid-cols-2 gap-3">
                 <div className="p-3 rounded-lg bg-slate-800/30 border border-slate-700/50">
                   <div className="text-xs text-slate-400 mb-1">Тип консоли</div>
-                  <div className="font-semibold text-white flex items-center gap-2">
-                    {system?.donor.consoleType === 'PS5' ? (
-                      <>
-                        <Play className="w-4 h-4 text-teal-400" />
-                        PS5
-                      </>
-                    ) : (
-                      <>
-                        <StopCircle className="w-4 h-4 text-blue-400" />
-                        PS4
-                      </>
-                    )}
-                  </div>
+	                  <div className="flex items-center gap-2 font-semibold text-white">
+	                    {(() => {
+	                      const meta = getSharingConsoleMeta(system?.donor.consoleType);
+	                      const Icon = meta.icon;
+	                      return (
+	                        <>
+	                          <Icon className={`h-4 w-4 ${meta.textClass}`} />
+	                          {system?.donor.consoleType?.startsWith('XBOX') ? 'Xbox' : meta.label}
+	                        </>
+	                      );
+	                    })()}
+	                  </div>
                 </div>
                 <div className="p-3 rounded-lg bg-slate-800/30 border border-slate-700/50">
                   <div className="text-xs text-slate-400 mb-1">Подписка</div>
@@ -481,54 +466,81 @@ export default function AssignClientPage() {
             </div>
           </div>
 
-          {/* Данные для входа */}
-          <div className="glass p-6 rounded-2xl border border-slate-700/50">
-            <div className="flex items-center gap-2 mb-4">
-              <div className="p-2 rounded-lg bg-gradient-to-br from-purple-500/20 to-pink-500/20">
-                <Key className="w-5 h-5 text-purple-400" />
-              </div>
-              <h2 className="text-lg font-bold text-white">Учетные данные</h2>
-              <span className="text-xs text-slate-400 ml-auto">опционально</span>
-            </div>
-            
-            <div className="space-y-3">
-              <div>
-                <label className="block text-xs text-slate-400 font-medium mb-2">Логин от почты</label>
-                <input
-                  type="email"
-                  className="w-full px-3.5 py-2.5 rounded-lg bg-slate-800/50 border border-slate-600/50 text-white placeholder:text-slate-600 focus:outline-none focus:ring-2 focus:ring-purple-500/50 focus:border-purple-500 transition text-sm"
-                  placeholder="user@example.com"
-                  value={formData.clientEmailLogin}
-                  onChange={(e) => setFormData({...formData, clientEmailLogin: e.target.value})}
-                />
-              </div>
-              
-              <div>
-                <label className="block text-xs text-slate-400 font-medium mb-2">Пароль от почты</label>
-                <input
-                  type="password"
-                  className="w-full px-3.5 py-2.5 rounded-lg bg-slate-800/50 border border-slate-600/50 text-white placeholder:text-slate-600 focus:outline-none focus:ring-2 focus:ring-purple-500/50 focus:border-purple-500 transition text-sm"
-                  placeholder="••••••••"
-                  value={formData.clientEmailPassword}
-                  onChange={(e) => setFormData({...formData, clientEmailPassword: e.target.value})}
-                />
-              </div>
-              
-              <div>
-                <label className="block text-xs text-slate-400 font-medium mb-2 flex items-center gap-1.5">
-                  <Shield className="w-3.5 h-3.5" />
-                  Пароль от аккаунта
-                </label>
-                <input
-                  type="password"
-                  className="w-full px-3.5 py-2.5 rounded-lg bg-slate-800/50 border border-slate-600/50 text-white placeholder:text-slate-600 focus:outline-none focus:ring-2 focus:ring-purple-500/50 focus:border-purple-500 transition text-sm"
-                  placeholder="••••••••"
-                  value={formData.clientAccountPassword}
-                  onChange={(e) => setFormData({...formData, clientAccountPassword: e.target.value})}
-                />
+          {isXboxDonorSlot ? (
+            <div className="glass p-6 rounded-2xl border border-emerald-500/30 bg-emerald-500/5">
+              <div className="flex items-start gap-3">
+                <div className="rounded-lg bg-emerald-500/20 p-2">
+                  <Key className="h-5 w-5 text-emerald-300" />
+                </div>
+                <div>
+                  <h2 className="text-lg font-bold text-white">Данные подтянутся автоматически</h2>
+                  <p className="mt-1 text-sm leading-6 text-slate-300">
+                    Для Xbox #1 клиент играет с донорского аккаунта. Логин и пароль донора будут показаны ему в личном кабинете, отдельный второй аккаунт вводить не нужно.
+                  </p>
+                </div>
               </div>
             </div>
-          </div>
+          ) : (
+            <div className="glass p-6 rounded-2xl border border-slate-700/50">
+              <div className="flex items-center gap-2 mb-4">
+                <div className="p-2 rounded-lg bg-gradient-to-br from-purple-500/20 to-pink-500/20">
+                  <Key className="w-5 h-5 text-purple-400" />
+                </div>
+                <h2 className="text-lg font-bold text-white">{accountSectionTitle}</h2>
+                <span className="text-xs text-slate-400 ml-auto">{accountSectionHint}</span>
+              </div>
+
+              {isXboxPersonalSlot ? (
+                <p className="mb-4 rounded-lg border border-lime-500/25 bg-lime-500/10 px-3 py-2 text-sm leading-6 text-lime-100">
+                  Для Xbox #2 донорский аккаунт будет показан отдельно для входа. Здесь укажите личный аккаунт клиента, с которого он будет запускать игры.
+                </p>
+              ) : null}
+
+              <div className="space-y-3">
+                <div>
+                  <label className="block text-xs text-slate-400 font-medium mb-2">
+                    {isXboxPersonalSlot ? 'Логин личного аккаунта клиента' : 'Логин от почты'}
+                  </label>
+                  <input
+                    type="email"
+                    className="w-full px-3.5 py-2.5 rounded-lg bg-slate-800/50 border border-slate-600/50 text-white placeholder:text-slate-600 focus:outline-none focus:ring-2 focus:ring-purple-500/50 focus:border-purple-500 transition text-sm"
+                    placeholder="user@example.com"
+                    value={formData.clientEmailLogin}
+                    onChange={(e) => setFormData({...formData, clientEmailLogin: e.target.value})}
+                    required={isXboxPersonalSlot}
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs text-slate-400 font-medium mb-2">
+                    {isXboxPersonalSlot ? 'Пароль личного аккаунта клиента' : 'Пароль от почты'}
+                  </label>
+                  <input
+                    type="password"
+                    className="w-full px-3.5 py-2.5 rounded-lg bg-slate-800/50 border border-slate-600/50 text-white placeholder:text-slate-600 focus:outline-none focus:ring-2 focus:ring-purple-500/50 focus:border-purple-500 transition text-sm"
+                    placeholder="••••••••"
+                    value={formData.clientEmailPassword}
+                    onChange={(e) => setFormData({...formData, clientEmailPassword: e.target.value})}
+                    required={isXboxPersonalSlot}
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs text-slate-400 font-medium mb-2 flex items-center gap-1.5">
+                    <Shield className="w-3.5 h-3.5" />
+                    {isXboxPersonalSlot ? 'Пароль профиля личного аккаунта' : 'Пароль от аккаунта'}
+                  </label>
+                  <input
+                    type="password"
+                    className="w-full px-3.5 py-2.5 rounded-lg bg-slate-800/50 border border-slate-600/50 text-white placeholder:text-slate-600 focus:outline-none focus:ring-2 focus:ring-purple-500/50 focus:border-purple-500 transition text-sm"
+                    placeholder="••••••••"
+                    value={formData.clientAccountPassword}
+                    onChange={(e) => setFormData({...formData, clientAccountPassword: e.target.value})}
+                  />
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Даты и заметки */}
           <div className="glass p-6 rounded-2xl border border-slate-700/50">
@@ -579,9 +591,7 @@ export default function AssignClientPage() {
             whileHover={{ scale: 1.01 }}
             whileTap={{ scale: 0.98 }}
             onClick={handleAssign}
-            disabled={!selectedClient || assigning || 
-              (consoleType === 'PS5' && ps5Available === 0) ||
-              (consoleType === 'PS4' && ps4Available === 0)}
+	            disabled={!selectedClient || assigning || selectedAvailable === 0}
             className="w-full py-4 rounded-xl bg-gradient-to-r from-purple-600 via-pink-600 to-teal-600 text-white font-semibold hover:from-purple-700 hover:via-pink-700 hover:to-teal-700 transition-all disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2.5 text-base shadow-lg shadow-purple-500/20"
           >
             {assigning ? (

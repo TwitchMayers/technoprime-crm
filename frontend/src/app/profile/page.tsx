@@ -1,249 +1,483 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { getSocket, registerUser } from '@/lib/socket';
+import {
+  Clock3,
+  MessageCircle,
+  PlayCircle,
+  RefreshCw,
+  ShieldCheck,
+  ShoppingCart,
+  StopCircle,
+  Wallet,
+} from 'lucide-react';
 import { toast } from 'sonner';
 import { fetchWithAuth } from '@/lib/fetchWithAuth';
+import { usePageActivity } from '@/hooks/usePageActivity';
+import MobilePageHeader from '@/components/MobilePageHeader';
 
-type Metric = { 
-  period: string; 
-  closedCount: number; 
-  revenue: number; 
-  profit: number; 
-  activeCount: number; 
-  queueCount: number; 
+type EmployeeMe = {
+  id: number;
+  name: string;
+  firstName?: string | null;
+  lastName?: string | null;
+  role: 'MANAGER' | 'TECHNICAL_SPECIALIST' | 'ADMIN' | 'SUPER_ADMIN';
+  position?: string | null;
+  login: string;
+  phone?: string | null;
+  isActive: boolean;
+  lastLoginAt?: string | null;
 };
 
-type Order = { 
-  id: number; 
-  status: 'NEW'|'IN_PROGRESS'|'COMPLETED'|'CANCELED'; 
-  client?: { name?: string; phone?: string }; 
-  totalPrice?: number; 
-  date?: string; 
+type MeMetrics = {
+  period: 'today' | 'week' | 'month' | 'year';
+  closedCount: number;
+  revenue: number;
+  profit: number;
+  activeCount: number;
+  queueCount: number;
+  messageCount: number;
+  dealsCreated: number;
+  answeredChats: number;
+  averageResponseMinutes: number | null;
+  unansweredMessagesToday?: number;
+  shiftStartedAt?: string | null;
+  shiftEndedAt?: string | null;
+  isOnShift?: boolean;
+  shiftsCount?: number;
+  soldConsolesCount?: number;
+  shiftIncome?: number;
+  salesBonusIncome?: number;
+  totalIncome?: number;
 };
 
-function Kpi({ title, value }: { title: string; value: string | number }) {
+type MeShift = {
+  isOnShift: boolean;
+  currentShift?: {
+    id: number;
+    startedAt: string;
+    endedAt?: string | null;
+    status: 'OPEN' | 'CLOSED';
+  } | null;
+  todayShiftStartedAt?: string | null;
+  todayShiftEndedAt?: string | null;
+};
+
+type MeEarnings = {
+  period: 'today' | 'week' | 'month' | 'year';
+  rates: { shift: number; saleBonus: number };
+  shiftsCount: number;
+  soldConsolesCount: number;
+  shiftIncome: number;
+  salesBonusIncome: number;
+  totalIncome: number;
+};
+
+function formatMoney(value?: number) {
+  return `${Number(value || 0).toLocaleString('ru-RU')} ₽`;
+}
+
+function formatDateTime(value?: string | null) {
+  if (!value) return '—';
+  return new Date(value).toLocaleString('ru-RU', {
+    day: '2-digit',
+    month: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+}
+
+function formatTimeOnly(value?: string | null) {
+  if (!value) return null;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+  return date.toLocaleTimeString('ru-RU', {
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+}
+
+function formatShiftWindow(start?: string | null, end?: string | null) {
+  const startLabel = formatTimeOnly(start);
+  const endLabel = formatTimeOnly(end);
+  if (startLabel && endLabel) return `${startLabel}–${endLabel}`;
+  if (startLabel) return `с ${startLabel}`;
+  if (endLabel) return `до ${endLabel}`;
+  return '—';
+}
+
+function Kpi({
+  title,
+  value,
+  subtitle,
+  icon: Icon,
+}: {
+  title: string;
+  value: string | number;
+  subtitle: string;
+  icon: any;
+}) {
   return (
-    <div className="glass p-4">
-      <div className="text-sm text-slate-400">{title}</div>
-      <div className="text-2xl font-extrabold mt-1">{value}</div>
+    <div className="glass p-3 sm:p-4">
+      <div className="flex items-start justify-between gap-2 sm:gap-3">
+        <div>
+          <div className="text-[10px] uppercase tracking-[0.12em] text-slate-500 sm:text-xs sm:tracking-[0.16em]">{title}</div>
+          <div className="mt-1.5 text-xl font-bold text-white sm:mt-2 sm:text-2xl">{value}</div>
+          <div className="mt-1 text-xs text-slate-400">{subtitle}</div>
+        </div>
+        <div className="rounded-xl border border-white/10 bg-white/5 p-2 sm:p-3">
+          <Icon className="h-4 w-4 text-cyan-300 sm:h-5 sm:w-5" />
+        </div>
+      </div>
     </div>
   );
 }
 
 export default function ProfilePage() {
   const router = useRouter();
-  const [me, setMe] = useState<any>(null);
-  const [period, setPeriod] = useState<'today'|'week'|'month'>('today');
-  const [metrics, setMetrics] = useState<Metric|null>(null);
-  const [queue, setQueue] = useState<Order[]>([]);
-  const [mineActive, setMineActive] = useState<Order[]>([]);
-  const [mineDone, setMineDone] = useState<Order[]>([]);
-  const [loading, setLoading] = useState(false);
+  const isPageActive = usePageActivity();
+  const [period, setPeriod] = useState<'today' | 'week' | 'month'>('today');
+  const [me, setMe] = useState<EmployeeMe | null>(null);
+  const [metrics, setMetrics] = useState<MeMetrics | null>(null);
+  const [shift, setShift] = useState<MeShift | null>(null);
+  const [earnings, setEarnings] = useState<MeEarnings | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [shiftSaving, setShiftSaving] = useState(false);
 
-  useEffect(() => {
-    const run = async () => {
-      const u = await fetchWithAuth('/api/me').then(r=>r.json()).catch(()=>null);
-      setMe(u);
-      if (u?.role === 'ADMIN' || u?.role === 'SUPER_ADMIN') {
-        router.replace('/dashboard');
+  const loadProfile = useCallback(
+    async (silent = false) => {
+      if (silent) {
+        setRefreshing(true);
+      } else {
+        setLoading(true);
       }
-    };
-    run();
-  }, [router]);
 
-  const money = (v?: number) => `${Number(v || 0).toLocaleString()} ₽`;
+      try {
+        const [meData, metricsData, shiftData, earningsData] = await Promise.all([
+          fetchWithAuth('/api/employees/me') as Promise<EmployeeMe>,
+          fetchWithAuth(`/api/employees/me/metrics?period=${period}`) as Promise<MeMetrics>,
+          fetchWithAuth('/api/employees/me/shift') as Promise<MeShift>,
+          fetchWithAuth(`/api/employees/me/earnings?period=${period}`) as Promise<MeEarnings>,
+        ]);
 
-  const loadMetrics = async (p: 'today'|'week'|'month') => {
-    const m = await fetchWithAuth(`/api/metrics?period=${p}`).then(r=>r.json()).catch(()=>null);
-    setMetrics(m);
-  };
-
-  const loadQueue = async () => {
-    const res = await fetchWithAuth('/api/orders/queue').then(r=>r.json()).catch(()=>[]);
-    const list = Array.isArray(res) ? res : (res?.items || []);
-    setQueue(list);
-  };
-
-  const loadMine = async (uid?: number) => {
-    if (!uid) return;
-    
-    const [activeRes, doneRes] = await Promise.all([
-      fetchWithAuth(`/api/orders?assigneeId=${uid}&status=IN_PROGRESS`).then(r=>r.json()).catch(()=>[]),
-      fetchWithAuth(`/api/orders?assigneeId=${uid}&status=COMPLETED`).then(r=>r.json()).catch(()=>[]),
-    ]);
-
-    const active = Array.isArray(activeRes) ? activeRes : (activeRes?.items || []);
-    const done = Array.isArray(doneRes) ? doneRes : (doneRes?.items || []);
-
-    setMineActive(active);
-    setMineDone(done);
-  };
-
-  useEffect(() => { 
-    loadMetrics(period); 
-    const t = setInterval(() => loadMetrics(period), 8000); 
-    return () => clearInterval(t); 
-  }, [period]);
+        setMe(meData);
+        setMetrics(metricsData);
+        setShift(shiftData);
+        setEarnings(earningsData);
+      } catch (error: any) {
+        toast.error(error?.message || 'Не удалось загрузить профиль сотрудника');
+      } finally {
+        if (silent) {
+          setRefreshing(false);
+        } else {
+          setLoading(false);
+        }
+      }
+    },
+    [period]
+  );
 
   useEffect(() => {
-    loadQueue();
-    const s = getSocket();
-    const handler = () => { 
-      loadQueue(); 
-      if (me?.id) loadMine(me.id); 
-    };
-    s.on('queueUpdated', handler);
-    return () => { s.off('queueUpdated', handler); };
-  }, [me?.id]);
+    void loadProfile();
+  }, [loadProfile]);
 
   useEffect(() => {
-    if (!me?.id) return;
-    registerUser(me.id);
-    loadMine(me.id);
-  }, [me?.id]);
+    if (!isPageActive) return;
+    const interval = window.setInterval(() => {
+      void loadProfile(true);
+    }, 25000);
+    return () => window.clearInterval(interval);
+  }, [isPageActive, loadProfile]);
 
-  const name = useMemo(() => {
-    if (!me) return '';
-    return me.firstName || me.lastName ? `${me.firstName || ''} ${me.lastName || ''}`.trim() : me.name;
+  useEffect(() => {
+    if (!me) return;
+    if (me.role === 'ADMIN' || me.role === 'SUPER_ADMIN') {
+      router.replace('/analytics');
+    }
+  }, [me, router]);
+
+  const displayName = useMemo(() => {
+    if (!me) return 'Профиль сотрудника';
+    const fullName = [me.firstName, me.lastName].filter(Boolean).join(' ').trim();
+    return fullName || me.name;
   }, [me]);
 
-  const accept = async (o: Order) => {
-    setLoading(true);
-    try {
-      const meRes = await fetchWithAuth('/api/me').then(r=>r.json()).catch(()=>null);
-      const res = await fetchWithAuth(`/api/orders/assign`, {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({ orderId: o.id, assigneeId: meRes?.id || 1 })
-      });
+  const recommendations = useMemo(() => {
+    const tips: string[] = [];
+    const avgResponse = Number(metrics?.averageResponseMinutes || 0);
+    const unanswered = Number(metrics?.unansweredMessagesToday || 0);
 
-      if (!res.ok) {
-        const text = await res.text().catch(() => '');
-        let msg = text;
-        try { 
-          const j = JSON.parse(text); 
-          msg = j?.message || text; 
-        } catch {}
-        toast.error(msg || 'Не удалось принять заказ');
-        return;
+    if (me?.role === 'MANAGER') {
+      if (!shift?.isOnShift) {
+        tips.push(
+          'Начните смену в начале работы, чтобы CRM корректно считала рабочее время и эффективность.'
+        );
       }
+      if (avgResponse > 5) {
+        tips.push(
+          'Среднее время ответа выше 5 минут. Ускорьте первичный ответ, чтобы не терять вероятность сделки.'
+        );
+      }
+      if (unanswered > 0) {
+        tips.push(
+          `Сейчас есть ${unanswered} неотвеченных сообщений за сегодня. Закройте их в приоритете.`
+        );
+      }
+      if (Number(metrics?.activeCount || 0) > 7) {
+        tips.push(
+          'Нагрузка высокая. Разделите поток по задачам, чтобы не увеличить задержку ответа клиентам.'
+        );
+      }
+      if (!tips.length) {
+        tips.push(
+          'Работа идёт в хорошем темпе: продолжайте удерживать ответ до 5 минут и фиксируйте смены.'
+        );
+      }
+      return tips;
+    }
 
-      toast.success(`Заказ #${o.id} принят`);
-      await Promise.all([loadQueue(), loadMine(meRes?.id)]);
-    } finally { 
-      setLoading(false); 
+    if (!tips.length) {
+      tips.push(
+        'Фиксируйте смены и обновляйте задачи в CRM — это улучшает точность статистики по команде.'
+      );
+    }
+    return tips;
+  }, [
+    me?.role,
+    metrics?.activeCount,
+    metrics?.averageResponseMinutes,
+    metrics?.unansweredMessagesToday,
+    shift?.isOnShift,
+  ]);
+
+  const onStartShift = async () => {
+    setShiftSaving(true);
+    try {
+      await fetchWithAuth('/api/employees/me/shift/start', { method: 'POST' });
+      toast.success('Смена начата');
+      await loadProfile(true);
+    } catch (error: any) {
+      toast.error(error?.message || 'Не удалось начать смену');
+    } finally {
+      setShiftSaving(false);
     }
   };
 
+  const onEndShift = async () => {
+    setShiftSaving(true);
+    try {
+      await fetchWithAuth('/api/employees/me/shift/end', { method: 'POST' });
+      toast.success('Смена завершена');
+      await loadProfile(true);
+    } catch (error: any) {
+      toast.error(error?.message || 'Не удалось завершить смену');
+    } finally {
+      setShiftSaving(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="glass p-8 text-center text-slate-400">Загружаем профиль сотрудника...</div>
+    );
+  }
+
   if (me?.role === 'ADMIN' || me?.role === 'SUPER_ADMIN') {
     return (
-      <div className="flex items-center justify-center h-screen">
-        <div className="text-slate-400">Перенаправление на дашборд…</div>
-      </div>
+      <div className="glass p-8 text-center text-slate-400">Перенаправляем в аналитику...</div>
     );
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-baseline justify-between">
-        <h1 className="text-xl font-bold">{name || 'Профиль'}</h1>
-        <div className="text-slate-400">{me?.position || me?.role}</div>
-      </div>
+    <div className="mobile-page-shell md:space-y-6 md:pb-6">
+      <MobilePageHeader title={displayName} subtitle={me?.position || me?.role || 'Профиль'} sticky={false} />
 
-      <div className="flex gap-2">
-        <button 
-          className={`px-3 py-2 rounded-md transition ${period==='today'?'bg-purple-600':'bg-slate-700/50 hover:bg-slate-600/50'}`} 
-          onClick={()=>setPeriod('today')}
-        >
-          Сегодня
-        </button>
-        <button 
-          className={`px-3 py-2 rounded-md transition ${period==='week'?'bg-purple-600':'bg-slate-700/50 hover:bg-slate-600/50'}`} 
-          onClick={()=>setPeriod('week')}
-        >
-          Неделя
-        </button>
-        <button 
-          className={`px-3 py-2 rounded-md transition ${period==='month'?'bg-purple-600':'bg-slate-700/50 hover:bg-slate-600/50'}`} 
-          onClick={()=>setPeriod('month')}
-        >
-          Месяц
-        </button>
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <Kpi title="Закрыто" value={metrics?.closedCount ?? 0} />
-        <Kpi title="Моя выручка" value={money(metrics?.revenue)} />
-        <Kpi title="Моя маржа" value={money(metrics?.profit)} />
-        <Kpi title="Активные заказы" value={metrics?.activeCount ?? 0} />
-      </div>
-
-      <div className="glass p-4">
-        <div className="p-2 text-sm text-slate-300 font-semibold mb-2">Заказы к принятию</div>
-        <div className="max-h-[50vh] overflow-auto">
-          {queue.length === 0 ? (
-            <div className="p-4 text-slate-400 text-center">Нет заказов в очереди</div>
-          ) : (
-            <div className="space-y-2">
-              {queue.map(o => (
-                <div key={o.id} className="flex items-center justify-between rounded-lg bg-slate-800/50 border border-slate-700/50 px-4 py-3">
-                  <div className="text-white">
-                    <span className="font-semibold">#{o.id}</span> • {o.client?.name} 
-                    {o.client?.phone && <span className="text-slate-400 ml-2">({o.client.phone})</span>}
-                  </div>
-                  <button 
-                    className="px-4 py-2 rounded-lg bg-gradient-to-r from-cyan-600 to-sky-600 hover:from-cyan-500 hover:to-sky-500 transition disabled:opacity-50 font-medium text-sm"
-                    disabled={loading} 
-                    onClick={() => accept(o)}
-                  >
-                    Принять
-                  </button>
-                </div>
-              ))}
+      <div className="glass rounded-2xl border border-cyan-400/20 bg-slate-950/50 p-3 sm:p-5 md:rounded-[26px]">
+        <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+          <div className="hidden md:block">
+            <h1 className="text-2xl font-bold text-white">{displayName}</h1>
+            <div className="mt-1 text-sm text-slate-400">
+              {me?.position || me?.role || 'Сотрудник'} · {me?.login}
+              {me?.phone ? ` · ${me.phone}` : ''}
             </div>
-          )}
+            <div className="mt-2 text-xs text-slate-500">
+              Последний вход: {formatDateTime(me?.lastLoginAt)}
+            </div>
+          </div>
+
+          <div className="flex flex-col items-start gap-3 md:items-end">
+            <span className={`badge ${me?.isActive ? 'badge-success' : 'badge-danger'}`}>
+              {me?.isActive ? 'Активен' : 'Отключён'}
+            </span>
+            <div className="text-xs text-slate-400">
+              Смена сегодня:{' '}
+              {formatShiftWindow(shift?.todayShiftStartedAt, shift?.todayShiftEndedAt)}
+            </div>
+            <div className="grid w-full grid-cols-2 gap-2 md:flex md:w-auto">
+              {!shift?.isOnShift ? (
+                <button
+                  type="button"
+                  onClick={() => void onStartShift()}
+                  disabled={shiftSaving}
+                  className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-emerald-500/15 px-3 py-2 text-sm font-semibold text-emerald-200 transition hover:bg-emerald-500/25 disabled:opacity-60"
+                >
+                  <PlayCircle className="h-4 w-4" />
+                  {shiftSaving ? 'Запуск...' : 'Начать смену'}
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => void onEndShift()}
+                  disabled={shiftSaving}
+                  className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-rose-500/15 px-3 py-2 text-sm font-semibold text-rose-200 transition hover:bg-rose-500/25 disabled:opacity-60"
+                >
+                  <StopCircle className="h-4 w-4" />
+                  {shiftSaving ? 'Завершаем...' : 'Закончить смену'}
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => void loadProfile(true)}
+                disabled={refreshing}
+                className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-slate-700/70 bg-slate-900/65 px-3 py-2 text-sm font-semibold text-slate-200 transition hover:bg-slate-800/70 disabled:opacity-60"
+              >
+                <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
+                Обновить
+              </button>
+            </div>
+          </div>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div className="glass p-4">
-          <div className="font-semibold mb-3 text-white">Мои активные заказы</div>
-          <div className="space-y-2">
-            {mineActive.length === 0 ? (
-              <div className="text-sm text-slate-400 text-center py-4">Нет активных</div>
-            ) : (
-              mineActive.map(o => (
-                <div key={o.id} className="rounded-lg bg-slate-800/30 border border-slate-700/50 px-3 py-2">
-                  <div className="text-white font-medium">#{o.id} • {o.client?.name}</div>
-                  {o.client?.phone && (
-                    <div className="text-xs text-slate-400 mt-1">{o.client.phone}</div>
-                  )}
-                </div>
-              ))
-            )}
+      <div className="grid grid-cols-3 gap-2 md:flex md:flex-wrap">
+        {[
+          { key: 'today', label: 'Сегодня' },
+          { key: 'week', label: 'Неделя' },
+          { key: 'month', label: 'Месяц' },
+        ].map(item => (
+          <button
+            key={item.key}
+            type="button"
+            onClick={() => setPeriod(item.key as 'today' | 'week' | 'month')}
+            className={`min-h-10 rounded-xl px-3 py-2 text-sm font-semibold transition md:px-4 ${
+              period === item.key
+                ? 'bg-gradient-to-r from-cyan-500 to-blue-500 text-white'
+                : 'border border-slate-700/70 bg-slate-900/65 text-slate-200'
+            }`}
+          >
+            {item.label}
+          </button>
+        ))}
+      </div>
+
+      <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-2 md:gap-4 xl:grid-cols-3">
+        <Kpi
+          title="Заказы"
+          value={metrics?.closedCount || 0}
+          subtitle="завершил"
+          icon={ShoppingCart}
+        />
+        <Kpi
+          title="Ответы"
+          value={metrics?.answeredChats || 0}
+          subtitle="чаты с ответом"
+          icon={MessageCircle}
+        />
+        <Kpi
+          title="Не отвечено"
+          value={metrics?.unansweredMessagesToday || 0}
+          subtitle="сообщений за сегодня"
+          icon={ShieldCheck}
+        />
+        <Kpi
+          title="Нагрузка"
+          value={metrics?.activeCount || 0}
+          subtitle="активных заказов"
+          icon={Clock3}
+        />
+        <Kpi
+          title="Ответ"
+          value={
+            metrics?.averageResponseMinutes == null ? '—' : `${metrics.averageResponseMinutes}`
+          }
+          subtitle="минут в среднем"
+          icon={Clock3}
+        />
+        <Kpi
+          title="Смена"
+          value={formatShiftWindow(shift?.todayShiftStartedAt, shift?.todayShiftEndedAt)}
+          subtitle="по активности сегодня"
+          icon={ShiftIcon}
+        />
+      </div>
+
+      <div className="grid gap-3 md:gap-4 xl:grid-cols-[1.15fr_0.85fr]">
+        <div className="glass p-3 sm:p-5">
+          <div className="mb-4 flex items-center gap-2">
+            <Wallet className="h-5 w-5 text-cyan-300" />
+            <h2 className="text-lg font-semibold text-white">Доход сотрудника</h2>
+          </div>
+
+          <div className="grid grid-cols-3 gap-2.5 md:gap-3">
+            <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-3 md:p-4">
+              <div className="text-xs uppercase tracking-[0.16em] text-slate-500">Смены</div>
+              <div className="mt-2 text-2xl font-bold text-white">{earnings?.shiftsCount || 0}</div>
+              <div className="text-xs text-slate-500">
+                {formatMoney(earnings?.rates.shift || 2000)} за смену
+              </div>
+            </div>
+            <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-3 md:p-4">
+              <div className="text-xs uppercase tracking-[0.16em] text-slate-500">Продажи</div>
+              <div className="mt-2 text-2xl font-bold text-white">
+                {earnings?.soldConsolesCount || 0}
+              </div>
+              <div className="text-xs text-slate-500">
+                {formatMoney(earnings?.rates.saleBonus || 1000)} за приставку
+              </div>
+            </div>
+            <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-3 md:p-4">
+              <div className="text-xs uppercase tracking-[0.16em] text-slate-500">Итого</div>
+              <div className="mt-2 text-2xl font-bold text-white">
+                {formatMoney(earnings?.totalIncome || 0)}
+              </div>
+              <div className="text-xs text-slate-500">за выбранный период</div>
+            </div>
+          </div>
+
+          <div className="mt-4 rounded-2xl border border-slate-700/70 bg-slate-950/55 p-4 text-sm text-slate-300">
+            <div>
+              {formatMoney(earnings?.shiftIncome || 0)} за смены +{' '}
+              {formatMoney(earnings?.salesBonusIncome || 0)} за проданные приставки.
+            </div>
           </div>
         </div>
 
-        <div className="glass p-4">
-          <div className="font-semibold mb-3 text-white">Мои завершённые</div>
+        <div className="glass p-3 sm:p-5">
+          <div className="mb-3 flex items-center gap-2">
+            <ShieldCheck className="h-5 w-5 text-cyan-300" />
+            <h2 className="text-lg font-semibold text-white">Персональные рекомендации</h2>
+          </div>
           <div className="space-y-2">
-            {mineDone.length === 0 ? (
-              <div className="text-sm text-slate-400 text-center py-4">Ещё нет</div>
-            ) : (
-              mineDone.map(o => (
-                <div key={o.id} className="rounded-lg bg-slate-800/30 border border-slate-700/50 px-3 py-2">
-                  <div className="flex items-center justify-between">
-                    <div className="text-white font-medium">#{o.id} • {o.client?.name}</div>
-                    <div className="text-teal-400 font-bold">{money(o.totalPrice)}</div>
-                  </div>
-                </div>
-              ))
-            )}
+            {recommendations.map((tip, index) => (
+              <div
+                key={`${index}-${tip}`}
+                className="rounded-2xl border border-white/10 bg-white/[0.03] p-3 text-sm text-slate-200"
+              >
+                {tip}
+              </div>
+            ))}
+          </div>
+          <div className="mt-4 text-xs text-slate-500">
+            Идеальный первичный ответ клиенту: до 5 минут.
           </div>
         </div>
       </div>
     </div>
   );
+}
+
+function ShiftIcon(props: any) {
+  return <Clock3 {...props} />;
 }

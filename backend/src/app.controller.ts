@@ -1,5 +1,6 @@
-import { Controller, Get, Logger } from '@nestjs/common';
+import { Controller, Get, Logger, UseGuards } from '@nestjs/common';
 import { AppService } from './app.service';
+import { JwtAuthGuard } from './auth/jwt-auth.guard';
 
 @Controller()
 export class AppController {
@@ -14,12 +15,13 @@ export class AppController {
 
   // ДОБАВЛЯЕМ ТЕСТОВЫЕ ЭНДПОИНТЫ ДЛЯ ДИАГНОСТИКИ
   @Get('test')
+  @UseGuards(JwtAuthGuard)
   getTest() {
     this.logger.log('GET /test called');
-    return { 
+    return {
       message: 'Test endpoint works!',
       timestamp: new Date().toISOString(),
-      status: 'OK'
+      status: 'OK',
     };
   }
 
@@ -28,23 +30,24 @@ export class AppController {
     return {
       status: 'UP',
       service: 'TechnoPrime CRM Backend',
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
     };
   }
 
   @Get('modules')
+  @UseGuards(JwtAuthGuard)
   getModules() {
     return {
       message: 'Available modules check',
       modules: [
         'ClientsModule',
-        'ProductsModule', 
+        'ProductsModule',
         'OrdersModule',
         'TasksModule',
         'SubscriptionsModule',
-        'SharingSystemsModule'
+        'SharingSystemsModule',
       ],
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
     };
   }
 }

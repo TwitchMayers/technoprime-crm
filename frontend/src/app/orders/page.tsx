@@ -1,18 +1,23 @@
 'use client';
 
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { getSocket } from '@/lib/socket';
-import { Search, Calendar, Plus, Trash2, ShoppingCart, ChevronDown, Phone, TrendingUp } from 'lucide-react';
+import { Search, Calendar, Plus, Trash2, ShoppingCart, ChevronDown, Phone } from 'lucide-react';
 import Link from 'next/link';
 import { toast } from 'sonner';
 import { motion, AnimatePresence } from 'framer-motion';
 import { fetchWithAuth } from '@/lib/fetchWithAuth';
 import ProtectedRoute from '@/components/ProtectedRoute';
+import { usePageActivity } from '@/hooks/usePageActivity';
+import MobilePageHeader from '@/components/MobilePageHeader';
 
 type Order = {
   id: number;
   date: string;
-  status: 'NEW' | 'IN_PROGRESS' | 'COMPLETED' | 'CANCELED';
+  status: 'NEW' | 'IN_PROGRESS' | 'COMPLETED' | 'CANCELED' | 'RETURNED';
+  source?: 'STORE' | 'MANUAL';
+  isShopLead?: boolean;
+  leadStage?: 'PREORDER' | null;
   client: { id: number; name: string; phone: string } | null;
   totalPrice?: string | number;
   items?: Array<{
@@ -21,6 +26,52 @@ type Order = {
     qty: number;
     salePrice: number;
   }>;
+};
+
+type OrderDetails = Order & {
+  comment?: string | null;
+  leadInfo?: {
+    product?: string | null;
+    requestedPhone?: string | null;
+    city?: string | null;
+    address?: string | null;
+    comment?: string | null;
+    serialNumber?: string | null;
+  } | null;
+  client: {
+    id: number;
+    name: string;
+    phone: string;
+    city?: string | null;
+    address?: string | null;
+  } | null;
+  items: Array<{
+    id: number;
+    productId: number;
+    qty: number;
+    unitPrice?: number | string;
+    variantKey?: string | null;
+    product?: { id: number; name: string } | null;
+    inventoryUnits?: Array<{
+      id: number;
+      serialNumber: string | null;
+    }>;
+  }>;
+};
+
+type LeadInventoryOption = {
+  id: number;
+  serialNumber?: string | null;
+  displayName?: string | null;
+  variantLabel?: string | null;
+  memoryGb?: number | null;
+  product?: {
+    id: number;
+    name: string;
+    brand?: string | null;
+    model?: string | null;
+    version?: string | null;
+  } | null;
 };
 
 const statusConfig = {
@@ -48,6 +99,12 @@ const statusConfig = {
     border: 'border-rose-500/50',
     text: 'text-rose-400',
   },
+  RETURNED: {
+    label: 'Возвращён',
+    bg: 'bg-slate-500/20',
+    border: 'border-slate-500/50',
+    text: 'text-slate-300',
+  },
 };
 
 function StatusChip({ status }: { status: Order['status'] }) {
@@ -62,6 +119,7 @@ function StatusChip({ status }: { status: Order['status'] }) {
 }
 
 export default function OrdersPage() {
+  const isPageActive = usePageActivity();
   const [tab, setTab] = useState<'all' | 'queue' | 'done'>('all');
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
@@ -69,8 +127,27 @@ export default function OrdersPage() {
   const [rows, setRows] = useState<Order[]>([]);
   const [loading, setLoading] = useState(false);
   const [expandedId, setExpandedId] = useState<number | null>(null);
+  const [sendingLeadId, setSendingLeadId] = useState<number | null>(null);
+  const [editingLeadId, setEditingLeadId] = useState<number | null>(null);
+  const [editingLeadLoading, setEditingLeadLoading] = useState(false);
+  const [savingLead, setSavingLead] = useState(false);
+  const [leadInventoryOptions, setLeadInventoryOptions] = useState<LeadInventoryOption[]>([]);
+  const [leadForm, setLeadForm] = useState({
+    name: '',
+    phone: '',
+    city: '',
+    address: '',
+    comment: '',
+    inventoryUnitId: '0',
+    productName: '',
+    currentSerial: '',
+  });
+  const requestInFlightRef = useRef(false);
 
   const load = async () => {
+    if (requestInFlightRef.current) return;
+
+    requestInFlightRef.current = true;
     setLoading(true);
     try {
       const params = new URLSearchParams();
@@ -88,6 +165,7 @@ export default function OrdersPage() {
       toast.error('Ошибка загрузки заказов');
       setRows([]);
     } finally {
+      requestInFlightRef.current = false;
       setLoading(false);
     }
   };
@@ -98,12 +176,15 @@ export default function OrdersPage() {
 
   useEffect(() => {
     const s = getSocket();
-    const handler = () => load();
+    const handler = () => {
+      if (!isPageActive) return;
+      void load();
+    };
     s.on('queueUpdated', handler);
     return () => {
       s.off('queueUpdated', handler);
     };
-  }, [tab]);
+  }, [isPageActive, tab]);
 
   const deleteOrder = async (orderId: number) => {
     if (!confirm('Удалить заказ? Товары вернутся на склад.')) return;
@@ -117,6 +198,97 @@ export default function OrdersPage() {
       load();
     } catch (err: any) {
       toast.error(err.message || 'Ошибка удаления заказа');
+    }
+  };
+
+  const sendLeadToTasks = async (orderId: number) => {
+    setSendingLeadId(orderId);
+    try {
+      await fetchWithAuth(`/api/orders/${orderId}/send-to-tasks`, {
+        method: 'POST',
+      });
+      toast.success('Предзаказ передан в задачи для техника');
+      await load();
+    } catch (err: any) {
+      toast.error(err?.message || 'Не удалось передать предзаказ в задачи');
+    } finally {
+      setSendingLeadId(null);
+    }
+  };
+
+  const closeLeadEditor = () => {
+    if (savingLead) return;
+    setEditingLeadId(null);
+    setLeadInventoryOptions([]);
+    setLeadForm({
+      name: '',
+      phone: '',
+      city: '',
+      address: '',
+      comment: '',
+      inventoryUnitId: '0',
+      productName: '',
+      currentSerial: '',
+    });
+  };
+
+  const openLeadEditor = async (orderId: number) => {
+    setEditingLeadId(orderId);
+    setEditingLeadLoading(true);
+    try {
+      const [detail, inventoryPayload] = await Promise.all([
+        fetchWithAuth(`/api/orders/${orderId}`) as Promise<OrderDetails>,
+        fetchWithAuth(`/api/orders/${orderId}/lead-inventory-options`) as Promise<{
+          items?: LeadInventoryOption[];
+        }>,
+      ]);
+
+      const firstItem = detail?.items?.[0];
+      const currentInventoryId = firstItem?.inventoryUnits?.[0]?.id || 0;
+      setLeadInventoryOptions(Array.isArray(inventoryPayload?.items) ? inventoryPayload.items : []);
+      setLeadForm({
+        name: detail?.client?.name || '',
+        phone: detail?.leadInfo?.requestedPhone || detail?.client?.phone || '',
+        city: detail?.leadInfo?.city || detail?.client?.city || '',
+        address: detail?.leadInfo?.address || detail?.client?.address || '',
+        comment: detail?.leadInfo?.comment || '',
+        inventoryUnitId: currentInventoryId ? String(currentInventoryId) : '0',
+        productName: firstItem?.product?.name || detail?.leadInfo?.product || '',
+        currentSerial: firstItem?.inventoryUnits?.[0]?.serialNumber || detail?.leadInfo?.serialNumber || '',
+      });
+    } catch (err: any) {
+      toast.error(err?.message || 'Не удалось открыть предзаказ');
+      setEditingLeadId(null);
+    } finally {
+      setEditingLeadLoading(false);
+    }
+  };
+
+  const saveLead = async () => {
+    if (!editingLeadId) return;
+
+    setSavingLead(true);
+    try {
+      await fetchWithAuth(`/api/orders/${editingLeadId}/lead`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: leadForm.name,
+          phone: leadForm.phone,
+          city: leadForm.city,
+          address: leadForm.address,
+          comment: leadForm.comment,
+          inventoryUnitId: Number(leadForm.inventoryUnitId || 0),
+        }),
+      });
+
+      toast.success('Предзаказ обновлён');
+      closeLeadEditor();
+      await load();
+    } catch (err: any) {
+      toast.error(err?.message || 'Не удалось сохранить предзаказ');
+    } finally {
+      setSavingLead(false);
     }
   };
 
@@ -135,20 +307,22 @@ export default function OrdersPage() {
 
   return (
     <ProtectedRoute allowedRoles={['ADMIN', 'MANAGER']}>
-      <div className="space-y-6 pb-20">
+      <div className="mobile-page-shell md:space-y-6 md:pb-20">
+        <MobilePageHeader title="Заказы" subtitle={`${stats.total} всего · ${stats.inProgress} в работе`} sticky={false} />
+
         {/* ===== HEADER ===== */}
         <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }}>
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-            <div>
+          <div className="flex flex-col justify-between gap-3 rounded-2xl border border-slate-700/60 bg-slate-900/35 p-3 md:flex-row md:items-center md:gap-4 md:border-0 md:bg-transparent md:p-0">
+            <div className="hidden md:block">
               <h1 className="text-3xl font-bold text-white">Заказы</h1>
-              <p className="text-slate-400 mt-1">
+              <p className="mt-1 text-slate-400">
                 Всего {stats.total} • {stats.completed} завершено • {stats.inProgress} в работе
               </p>
             </div>
 
             <Link
               href="/orders/new"
-              className="flex items-center gap-2 px-6 py-3 rounded-xl bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white font-bold shadow-lg shadow-cyan-500/30 transition-all w-full md:w-auto justify-center md:justify-start"
+              className="flex min-h-11 w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-cyan-600 to-blue-600 px-4 py-3 text-sm font-bold text-white shadow-lg shadow-cyan-500/25 transition-all hover:from-cyan-500 hover:to-blue-500 md:w-auto md:justify-start md:rounded-xl md:px-6"
             >
               <Plus className="w-5 h-5" />
               Новый заказ
@@ -161,23 +335,23 @@ export default function OrdersPage() {
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.1 }}
-          className="grid grid-cols-2 md:grid-cols-4 gap-4"
+          className="grid grid-cols-2 gap-2.5 md:grid-cols-4 md:gap-4"
         >
-          <div className="glass p-4 rounded-xl">
-            <div className="text-2xl font-bold text-white">{stats.total}</div>
-            <div className="text-sm text-slate-400 mt-1">Всего заказов</div>
+          <div className="glass rounded-xl p-3 md:p-4">
+            <div className="text-xl font-bold text-white md:text-2xl">{stats.total}</div>
+            <div className="mt-1 text-xs text-slate-400 md:text-sm">Всего заказов</div>
           </div>
-          <div className="glass p-4 rounded-xl">
-            <div className="text-2xl font-bold text-green-400">{stats.completed}</div>
-            <div className="text-sm text-slate-400 mt-1">Завершено</div>
+          <div className="glass rounded-xl p-3 md:p-4">
+            <div className="text-xl font-bold text-green-400 md:text-2xl">{stats.completed}</div>
+            <div className="mt-1 text-xs text-slate-400 md:text-sm">Завершено</div>
           </div>
-          <div className="glass p-4 rounded-xl">
-            <div className="text-2xl font-bold text-amber-400">{stats.inProgress}</div>
-            <div className="text-sm text-slate-400 mt-1">В работе</div>
+          <div className="glass rounded-xl p-3 md:p-4">
+            <div className="text-xl font-bold text-amber-400 md:text-2xl">{stats.inProgress}</div>
+            <div className="mt-1 text-xs text-slate-400 md:text-sm">В работе</div>
           </div>
-          <div className="glass p-4 rounded-xl col-span-2 md:col-span-1">
-            <div className="text-2xl font-bold text-cyan-400">{stats.totalSum.toLocaleString()} ₽</div>
-            <div className="text-sm text-slate-400 mt-1">Общая сумма</div>
+          <div className="glass col-span-2 rounded-xl p-3 md:col-span-1 md:p-4">
+            <div className="text-xl font-bold text-cyan-400 md:text-2xl">{stats.totalSum.toLocaleString()} ₽</div>
+            <div className="mt-1 text-xs text-slate-400 md:text-sm">Общая сумма</div>
           </div>
         </motion.div>
 
@@ -186,9 +360,9 @@ export default function OrdersPage() {
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.2 }}
-          className="glass p-3 rounded-xl"
+          className="glass rounded-xl p-2.5 md:p-3"
         >
-          <div className="flex gap-2">
+          <div className="mobile-scroll-row md:mx-0 md:flex md:overflow-visible md:px-0 md:pb-0">
             {[
               { key: 'all', label: 'Все заказы' },
               { key: 'queue', label: 'Очередь' },
@@ -199,7 +373,7 @@ export default function OrdersPage() {
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}
                 onClick={() => setTab(key as any)}
-                className={`flex items-center gap-2 px-4 py-2.5 rounded-lg transition-all whitespace-nowrap font-medium text-sm ${
+                className={`flex min-h-10 items-center gap-2 whitespace-nowrap rounded-xl px-4 py-2.5 text-sm font-medium transition-all md:rounded-lg ${
                   tab === key
                     ? 'bg-gradient-to-r from-cyan-600 to-blue-600 text-white shadow-lg'
                     : 'bg-slate-800/50 text-slate-300 hover:bg-slate-700/50 border border-slate-700'
@@ -216,7 +390,7 @@ export default function OrdersPage() {
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.3 }}
-          className="glass p-4 rounded-xl"
+          className="glass rounded-xl p-3 md:p-4"
         >
           <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
             <div className="relative">
@@ -297,7 +471,14 @@ export default function OrdersPage() {
                         <span className="font-bold text-cyan-400">#{o.id}</span>
                       </td>
                       <td className="p-4">
-                        <div className="font-medium text-white">{o.client?.name ?? '—'}</div>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <div className="font-medium text-white">{o.client?.name ?? '—'}</div>
+                          {o.isShopLead ? (
+                            <span className="inline-flex rounded-full border border-fuchsia-500/40 bg-fuchsia-500/15 px-2 py-0.5 text-[11px] font-semibold text-fuchsia-300">
+                              Предзаказ
+                            </span>
+                          ) : null}
+                        </div>
                         <div className="text-xs text-slate-500 mt-0.5">{o.client?.phone ?? '—'}</div>
                       </td>
                       <td className="p-4">
@@ -310,15 +491,40 @@ export default function OrdersPage() {
                         {o.date ? new Date(o.date).toLocaleDateString('ru') : ''}
                       </td>
                       <td className="p-4 text-center">
-                        <motion.button
-                          whileHover={{ scale: 1.1 }}
-                          whileTap={{ scale: 0.95 }}
-                          onClick={() => deleteOrder(o.id)}
-                          className="p-2 rounded-lg bg-rose-500/20 hover:bg-rose-500/40 border border-rose-500/30 transition inline-block"
-                          title="Удалить заказ"
-                        >
-                          <Trash2 className="w-4 h-4 text-rose-400" />
-                        </motion.button>
+                        <div className="flex items-center justify-center gap-2">
+                          {o.isShopLead && o.source === 'STORE' && o.status === 'NEW' ? (
+                            <motion.button
+                              whileHover={{ scale: 1.04 }}
+                              whileTap={{ scale: 0.96 }}
+                              onClick={() => openLeadEditor(o.id)}
+                              className="px-3 py-2 rounded-lg bg-violet-500/15 hover:bg-violet-500/25 border border-violet-500/30 text-violet-200 text-xs font-semibold transition"
+                              title="Дополнить предзаказ"
+                            >
+                              Дополнить
+                            </motion.button>
+                          ) : null}
+                          {o.source === 'STORE' && o.status === 'NEW' ? (
+                            <motion.button
+                              whileHover={{ scale: 1.04 }}
+                              whileTap={{ scale: 0.96 }}
+                              onClick={() => sendLeadToTasks(o.id)}
+                              disabled={sendingLeadId === o.id}
+                              className="px-3 py-2 rounded-lg bg-cyan-500/15 hover:bg-cyan-500/25 border border-cyan-500/30 text-cyan-300 text-xs font-semibold transition disabled:opacity-60"
+                              title="Передать заказ в задачи"
+                            >
+                              {sendingLeadId === o.id ? 'Передаём...' : 'В задачи'}
+                            </motion.button>
+                          ) : null}
+                          <motion.button
+                            whileHover={{ scale: 1.1 }}
+                            whileTap={{ scale: 0.95 }}
+                            onClick={() => deleteOrder(o.id)}
+                            className="p-2 rounded-lg bg-rose-500/20 hover:bg-rose-500/40 border border-rose-500/30 transition inline-block"
+                            title="Удалить заказ"
+                          >
+                            <Trash2 className="w-4 h-4 text-rose-400" />
+                          </motion.button>
+                        </div>
                       </td>
                     </motion.tr>
                   ))
@@ -362,7 +568,14 @@ export default function OrdersPage() {
                     >
                       <div className="flex items-start justify-between gap-3">
                         <div className="flex-1">
-                          <div className="text-2xl font-bold text-white">#{o.id}</div>
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <div className="text-2xl font-bold text-white">#{o.id}</div>
+                            {o.isShopLead ? (
+                              <span className="inline-flex rounded-full border border-fuchsia-500/40 bg-fuchsia-500/15 px-2 py-0.5 text-[11px] font-semibold text-fuchsia-300">
+                                Предзаказ
+                              </span>
+                            ) : null}
+                          </div>
                           <div className="text-sm text-slate-400 mt-1">{o.client?.name ?? '—'}</div>
                         </div>
                         <div className="flex flex-col items-end gap-2">
@@ -450,6 +663,23 @@ export default function OrdersPage() {
 
                             {/* ACTIONS */}
                             <div className="flex gap-2 pt-3 border-t border-slate-700/50">
+                              {o.isShopLead && o.source === 'STORE' && o.status === 'NEW' ? (
+                                <button
+                                  onClick={() => openLeadEditor(o.id)}
+                                  className="flex-1 px-3 py-2 rounded-lg bg-violet-500/20 hover:bg-violet-500/30 border border-violet-500/30 text-violet-200 transition text-sm font-medium"
+                                >
+                                  Дополнить
+                                </button>
+                              ) : null}
+                              {o.source === 'STORE' && o.status === 'NEW' ? (
+                                <button
+                                  onClick={() => sendLeadToTasks(o.id)}
+                                  disabled={sendingLeadId === o.id}
+                                  className="flex-1 px-3 py-2 rounded-lg bg-cyan-500/20 hover:bg-cyan-500/30 border border-cyan-500/30 text-cyan-300 transition text-sm font-medium disabled:opacity-60"
+                                >
+                                  {sendingLeadId === o.id ? 'Передаём...' : 'Передать в задачи'}
+                                </button>
+                              ) : null}
                               <button
                                 onClick={() => deleteOrder(o.id)}
                                 className="flex-1 px-3 py-2 rounded-lg bg-rose-500/20 hover:bg-rose-500/30 border border-rose-500/30 text-rose-400 transition text-sm font-medium"
@@ -467,6 +697,146 @@ export default function OrdersPage() {
             </AnimatePresence>
           )}
         </div>
+
+        <AnimatePresence>
+          {editingLeadId ? (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 p-4"
+            >
+              <motion.div
+                initial={{ opacity: 0, y: 20, scale: 0.98 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, y: 16, scale: 0.98 }}
+                className="glass w-full max-w-2xl rounded-2xl border border-slate-700/70 p-5"
+              >
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <h3 className="text-xl font-bold text-white">Дополнить предзаказ #{editingLeadId}</h3>
+                    <p className="mt-1 text-sm text-slate-400">
+                      Уточните данные после звонка и при необходимости назначьте приставку со склада.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={closeLeadEditor}
+                    className="rounded-lg border border-slate-700 px-3 py-2 text-sm text-slate-300 transition hover:bg-slate-800/60"
+                  >
+                    Закрыть
+                  </button>
+                </div>
+
+                {editingLeadLoading ? (
+                  <div className="py-16 text-center text-slate-300">Загружаем данные предзаказа…</div>
+                ) : (
+                  <div className="mt-5 space-y-4">
+                    <div className="rounded-xl border border-cyan-500/20 bg-cyan-500/10 p-4">
+                      <div className="text-xs uppercase tracking-[0.18em] text-cyan-200/80">
+                        Приставка
+                      </div>
+                      <div className="mt-2 text-lg font-semibold text-white">
+                        {leadForm.productName || 'Товар не определён'}
+                      </div>
+                      {leadForm.currentSerial ? (
+                        <div className="mt-2 text-sm text-slate-300">
+                          Сейчас назначен серийный номер: <span className="text-white">{leadForm.currentSerial}</span>
+                        </div>
+                      ) : null}
+                    </div>
+
+                    <div className="grid gap-3 md:grid-cols-2">
+                      <label className="space-y-1">
+                        <span className="text-sm text-slate-300">Имя клиента</span>
+                        <input
+                          className="w-full rounded-lg border border-slate-600/60 bg-slate-900/70 px-4 py-3 text-white"
+                          value={leadForm.name}
+                          onChange={(e) => setLeadForm(prev => ({ ...prev, name: e.target.value }))}
+                        />
+                      </label>
+                      <label className="space-y-1">
+                        <span className="text-sm text-slate-300">Телефон заявки</span>
+                        <input
+                          className="w-full rounded-lg border border-slate-600/60 bg-slate-900/70 px-4 py-3 text-white"
+                          value={leadForm.phone}
+                          onChange={(e) => setLeadForm(prev => ({ ...prev, phone: e.target.value }))}
+                          placeholder="+7 (9XX) XXX-XX-XX"
+                        />
+                      </label>
+                    </div>
+
+                    <div className="grid gap-3 md:grid-cols-2">
+                      <label className="space-y-1">
+                        <span className="text-sm text-slate-300">Город</span>
+                        <input
+                          className="w-full rounded-lg border border-slate-600/60 bg-slate-900/70 px-4 py-3 text-white"
+                          value={leadForm.city}
+                          onChange={(e) => setLeadForm(prev => ({ ...prev, city: e.target.value }))}
+                        />
+                      </label>
+                      <label className="space-y-1">
+                        <span className="text-sm text-slate-300">Приставка со склада</span>
+                        <select
+                          className="w-full rounded-lg border border-slate-600/60 bg-slate-900/70 px-4 py-3 text-white"
+                          value={leadForm.inventoryUnitId}
+                          onChange={(e) =>
+                            setLeadForm(prev => ({ ...prev, inventoryUnitId: e.target.value }))
+                          }
+                        >
+                          <option value="0">Пока не назначать</option>
+                          {leadInventoryOptions.map(option => (
+                            <option key={option.id} value={option.id}>
+                              {option.serialNumber || option.displayName || `Единица #${option.id}`}
+                              {option.variantLabel ? ` • ${option.variantLabel}` : ''}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                    </div>
+
+                    <label className="space-y-1 block">
+                      <span className="text-sm text-slate-300">Адрес</span>
+                      <textarea
+                        className="min-h-[96px] w-full rounded-lg border border-slate-600/60 bg-slate-900/70 px-4 py-3 text-white"
+                        value={leadForm.address}
+                        onChange={(e) => setLeadForm(prev => ({ ...prev, address: e.target.value }))}
+                      />
+                    </label>
+
+                    <label className="space-y-1 block">
+                      <span className="text-sm text-slate-300">Комментарий менеджера / клиента</span>
+                      <textarea
+                        className="min-h-[96px] w-full rounded-lg border border-slate-600/60 bg-slate-900/70 px-4 py-3 text-white"
+                        value={leadForm.comment}
+                        onChange={(e) => setLeadForm(prev => ({ ...prev, comment: e.target.value }))}
+                      />
+                    </label>
+
+                    <div className="flex flex-col-reverse gap-2 pt-2 sm:flex-row sm:justify-end">
+                      <button
+                        type="button"
+                        onClick={closeLeadEditor}
+                        className="rounded-lg border border-slate-700 px-4 py-2.5 text-sm font-medium text-slate-300 transition hover:bg-slate-800/60"
+                        disabled={savingLead}
+                      >
+                        Отмена
+                      </button>
+                      <button
+                        type="button"
+                        onClick={saveLead}
+                        className="rounded-lg bg-gradient-to-r from-cyan-600 to-blue-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:from-cyan-500 hover:to-blue-500 disabled:opacity-60"
+                        disabled={savingLead}
+                      >
+                        {savingLead ? 'Сохраняем…' : 'Сохранить предзаказ'}
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </motion.div>
+            </motion.div>
+          ) : null}
+        </AnimatePresence>
       </div>
     </ProtectedRoute>
   );

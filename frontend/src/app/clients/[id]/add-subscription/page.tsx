@@ -2,10 +2,22 @@
 
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { ArrowLeft, Users, Calendar, Play, StopCircle, Shield, AlertTriangle, Clock } from 'lucide-react';
+import { ArrowLeft, Users, Calendar, Shield, AlertTriangle, Clock } from 'lucide-react';
 import Link from 'next/link';
 import { toast } from 'sonner';
 import { fetchWithAuth } from '@/lib/fetchWithAuth';
+import {
+  getFirstAvailableSlotType,
+  getDefaultSharingConsoleType,
+  getSharingConsoleMeta,
+  getSharingConsoleTypesForSubscription,
+  getSharingSlotTypes,
+  getSlotStat,
+  isSharingConsoleCompatibleWithSubscription,
+  isXboxConsoleType,
+  type SharingConsoleType,
+  type SharingSubscriptionType,
+} from '@/lib/sharing';
 
 type Client = {
   id: number;
@@ -17,11 +29,12 @@ type Client = {
 type SharingSystem = {
   id: number;
   name: string;
-  donor: {
-    email: string;
-    consoleType: 'PS4' | 'PS5';
-    endDate: string;
-  };
+	  donor: {
+	    email: string;
+		    consoleType: SharingConsoleType;
+    subscriptionType: SharingSubscriptionType;
+	    endDate: string;
+	  };
   availableSlots: number;
   usedSlots: number;
   totalSlots: number;
@@ -29,9 +42,15 @@ type SharingSystem = {
   isExpired: boolean;
   isExpiringSoon: boolean;
   clientSlots: Array<{
-    consoleType: 'PS4' | 'PS5';
+	    consoleType: SharingConsoleType;
     isActive: boolean;
-  }>;
+	  }>;
+  slotStats?: {
+    ps5?: { used: number; max: number; available: number };
+    ps4?: { used: number; max: number; available: number };
+    xbox1?: { used: number; max: number; available: number };
+    xbox2?: { used: number; max: number; available: number };
+  };
 };
 
 export default function AddClientSubscriptionPage() {
@@ -43,7 +62,7 @@ export default function AddClientSubscriptionPage() {
   const [sharingSystems, setSharingSystems] = useState<SharingSystem[]>([]);
   
   // Form state
-  const [subscriptionType, setSubscriptionType] = useState<'PS_PLUS' | 'GAME_PASS' | 'EA_PLAY'>('PS_PLUS');
+  const [subscriptionType, setSubscriptionType] = useState<SharingSubscriptionType>('PS_PLUS');
   const [accountType, setAccountType] = useState<'PERSONAL' | 'SHARING_CLIENT'>('PERSONAL');
   const [subscriptionPeriod, setSubscriptionPeriod] = useState<'MONTH' | 'THREE_MONTHS' | 'YEAR'>('MONTH');
   
@@ -54,7 +73,17 @@ export default function AddClientSubscriptionPage() {
   
   // Sharing system data
   const [selectedSystem, setSelectedSystem] = useState<number | null>(null);
-  const [selectedConsoleType, setSelectedConsoleType] = useState<'PS4' | 'PS5'>('PS5');
+  const [selectedConsoleType, setSelectedConsoleType] = useState<SharingConsoleType>('PS5');
+
+  const chooseSubscriptionType = (nextType: SharingSubscriptionType) => {
+    setSubscriptionType(nextType);
+    setSelectedSystem(null);
+    setSelectedConsoleType((prev) =>
+      isSharingConsoleCompatibleWithSubscription(nextType, prev)
+        ? prev
+        : getDefaultSharingConsoleType(nextType),
+    );
+  };
 
   useEffect(() => {
     const loadData = async () => {
@@ -72,8 +101,16 @@ export default function AddClientSubscriptionPage() {
         if (clientData?.consoleType) {
           if (clientData.consoleType.includes('PS5')) {
             setSelectedConsoleType('PS5');
+            setSubscriptionType('PS_PLUS');
           } else if (clientData.consoleType.includes('PS4')) {
             setSelectedConsoleType('PS4');
+            setSubscriptionType('PS_PLUS');
+          } else if (String(clientData.consoleType).toLowerCase().includes('xbox')) {
+            const xboxSystem = (Array.isArray(systemsData) ? systemsData : []).find((system: SharingSystem) =>
+              isXboxConsoleType(system.donor?.consoleType),
+            );
+            setSelectedConsoleType(getFirstAvailableSlotType(xboxSystem?.donor?.consoleType || 'XBOX_1', xboxSystem?.slotStats));
+            setSubscriptionType('GAME_PASS');
           }
         }
       } catch (error: any) {
@@ -100,6 +137,10 @@ export default function AddClientSubscriptionPage() {
 
     if (accountType === 'PERSONAL' && (!emailLogin || !emailPassword)) {
       toast.error('Заполните данные аккаунта');
+      return;
+    }
+    if (accountType === 'SHARING_CLIENT' && selectedConsoleType === 'XBOX_2' && (!emailLogin.trim() || !emailPassword.trim())) {
+      toast.error('Для Xbox #2 укажите логин и пароль личного аккаунта клиента');
       return;
     }
 
@@ -148,14 +189,11 @@ export default function AddClientSubscriptionPage() {
           throw new Error('Система шеринга не найдена');
         }
 
-        // Check if console type slot is available
-        const activeSlots = selectedSystemData.clientSlots?.filter(slot => slot.isActive) || [];
-        const slotCount = activeSlots.filter(slot => slot.consoleType === selectedConsoleType).length;
-        
-        if (slotCount >= 1) {
-          toast.error(`Слот ${selectedConsoleType} в выбранной системе уже занят`);
-          setSaving(false);
-          return;
+	        const slotStat = getSlotStat(selectedSystemData.slotStats, selectedConsoleType);
+	        if (slotStat.available <= 0) {
+	          toast.error(`Слот ${selectedConsoleType} в выбранной системе уже занят`);
+	          setSaving(false);
+	          return;
         }
 
         const body = {
@@ -164,6 +202,9 @@ export default function AddClientSubscriptionPage() {
           consoleType: selectedConsoleType,
           startDate: now.toISOString(),
           endDate: selectedSystemData.donor.endDate,
+          clientEmailLogin: selectedConsoleType === 'XBOX_2' ? emailLogin.trim() : undefined,
+          clientEmailPassword: selectedConsoleType === 'XBOX_2' ? emailPassword.trim() : undefined,
+          clientAccountPassword: selectedConsoleType === 'XBOX_2' ? accountPassword.trim() || undefined : undefined,
           notes: `Подписка добавлена через интерфейс клиента`,
         };
 
@@ -188,18 +229,12 @@ export default function AddClientSubscriptionPage() {
     return sharingSystems.filter(system => {
       if (system.isExpired || system.daysLeft <= 0) return false;
       
-      const activeSlots = system.clientSlots?.filter(slot => slot.isActive) || [];
-      const ps5Count = activeSlots.filter(slot => slot.consoleType === 'PS5').length;
-      const ps4Count = activeSlots.filter(slot => slot.consoleType === 'PS4').length;
-      
-      // Check if selected console type is available
-      if (selectedConsoleType === 'PS5') {
-        return ps5Count < 1;
-      } else {
-        return ps4Count < 1;
-      }
-    });
-  };
+	      const compatible = getSharingSlotTypes(system.donor.consoleType).includes(selectedConsoleType);
+	      if (!compatible) return false;
+      if (system.donor.subscriptionType !== subscriptionType) return false;
+	      return getSlotStat(system.slotStats, selectedConsoleType).available > 0;
+	    });
+	  };
 
   if (loading) {
     return (
@@ -223,6 +258,7 @@ export default function AddClientSubscriptionPage() {
   }
 
   const availableSystems = getAvailableSystems();
+  const slotTypeOptions = getSharingConsoleTypesForSubscription(subscriptionType);
 
   return (
     <div className="space-y-6">
@@ -263,18 +299,13 @@ export default function AddClientSubscriptionPage() {
                   <div className="text-sm text-slate-400">Телефон</div>
                   <div className="font-medium text-white">{client.phone}</div>
                 </div>
-                {client.consoleType && (
-                  <div>
-                    <div className="text-sm text-slate-400">Консоль</div>
-                    <div className="font-medium text-white flex items-center gap-2">
-                      {client.consoleType.includes('PS5') ? (
-                        <Play className="w-4 h-4 text-teal-400" />
-                      ) : client.consoleType.includes('PS4') ? (
-                        <StopCircle className="w-4 h-4 text-blue-400" />
-                      ) : null}
-                      {client.consoleType}
-                    </div>
-                  </div>
+	                {client.consoleType && (
+	                  <div>
+	                    <div className="text-sm text-slate-400">Консоль</div>
+	                    <div className="font-medium text-white flex items-center gap-2">
+	                      {client.consoleType}
+	                    </div>
+	                  </div>
                 )}
               </div>
             </div>
@@ -299,7 +330,7 @@ export default function AddClientSubscriptionPage() {
                     <button
                       key={type.value}
                       type="button"
-                      onClick={() => setSubscriptionType(type.value as any)}
+	                      onClick={() => chooseSubscriptionType(type.value as SharingSubscriptionType)}
                       className={`p-3 rounded-lg border-2 transition ${
                         subscriptionType === type.value
                           ? 'border-teal-500 bg-teal-500/10'
@@ -412,32 +443,30 @@ export default function AddClientSubscriptionPage() {
                 <div className="space-y-4">
                   <div>
                     <label className="block text-sm font-medium text-slate-300 mb-2">Тип консоли для подключения</label>
-                    <div className="grid grid-cols-2 gap-4">
-                      <button
-                        type="button"
-                        onClick={() => setSelectedConsoleType('PS5')}
-                        className={`p-4 rounded-lg border-2 transition ${
-                          selectedConsoleType === 'PS5'
-                            ? 'border-teal-500 bg-teal-500/10'
-                            : 'border-slate-600 bg-slate-800/30'
-                        }`}
-                      >
-                        <Play className="w-6 h-6 mb-2 mx-auto" />
-                        <div className="font-medium text-center">PlayStation 5</div>
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setSelectedConsoleType('PS4')}
-                        className={`p-4 rounded-lg border-2 transition ${
-                          selectedConsoleType === 'PS4'
-                            ? 'border-blue-500 bg-blue-500/10'
-                            : 'border-slate-600 bg-slate-800/30'
-                        }`}
-                      >
-                        <StopCircle className="w-6 h-6 mb-2 mx-auto" />
-                        <div className="font-medium text-center">PlayStation 4</div>
-                      </button>
-                    </div>
+	                    <div className="grid grid-cols-2 gap-4">
+                      {slotTypeOptions.map((slotType) => {
+	                        const meta = getSharingConsoleMeta(slotType);
+	                        const Icon = meta.icon;
+	                        return (
+	                          <button
+	                            key={slotType}
+	                            type="button"
+		                            onClick={() => {
+                              setSelectedConsoleType(slotType);
+                              setSelectedSystem(null);
+                            }}
+	                            className={`rounded-lg border-2 p-4 transition ${
+	                              selectedConsoleType === slotType
+	                                ? meta.activeClass
+	                                : 'border-slate-600 bg-slate-800/30'
+	                            }`}
+	                          >
+	                            <Icon className={`mx-auto mb-2 h-6 w-6 ${meta.textClass}`} />
+	                            <div className="text-center font-medium">{meta.fullLabel}</div>
+	                          </button>
+	                        );
+	                      })}
+	                    </div>
                   </div>
 
                   <div>
@@ -447,17 +476,13 @@ export default function AddClientSubscriptionPage() {
                         <Shield className="w-12 h-12 mx-auto mb-2 text-slate-600" />
                         <div className="text-sm text-slate-400">Нет доступных систем шеринга</div>
                         <div className="text-xs text-slate-500 mt-1">
-                          {selectedConsoleType === 'PS5' 
-                            ? 'Все PS5 слоты заняты или нет активных систем'
-                            : 'Все PS4 слоты заняты или нет активных систем'}
+		                          Нет свободных слотов {getSharingConsoleMeta(selectedConsoleType).label} для выбранного типа подписки
                         </div>
                       </div>
                     ) : (
-                      <div className="space-y-2 max-h-[300px] overflow-y-auto">
-                        {availableSystems.map((system) => {
-                          const activeSlots = system.clientSlots?.filter(slot => slot.isActive) || [];
-                          const slotCount = activeSlots.filter(slot => slot.consoleType === selectedConsoleType).length;
-                          const available = slotCount < 1;
+	                      <div className="space-y-2 max-h-[300px] overflow-y-auto">
+	                        {availableSystems.map((system) => {
+	                          const available = getSlotStat(system.slotStats, selectedConsoleType).available > 0;
                           
                           return (
                             <div
@@ -472,12 +497,18 @@ export default function AddClientSubscriptionPage() {
                               <div className="flex items-center justify-between mb-2">
                                 <div className="font-medium text-white">{system.name}</div>
                                 <div className="flex items-center gap-2">
-                                  {system.donor.consoleType === 'PS5' ? (
-                                    <Play className="w-4 h-4 text-teal-400" />
-                                  ) : (
-                                    <StopCircle className="w-4 h-4 text-blue-400" />
-                                  )}
-                                  <span className="text-sm text-slate-400">{system.donor.consoleType}</span>
+	                                  {(() => {
+	                                    const meta = getSharingConsoleMeta(system.donor.consoleType);
+	                                    const Icon = meta.icon;
+	                                    return (
+	                                      <>
+	                                        <Icon className={`h-4 w-4 ${meta.textClass}`} />
+	                                        <span className="text-sm text-slate-400">
+	                                          {isXboxConsoleType(system.donor.consoleType) ? 'Xbox' : meta.label}
+	                                        </span>
+	                                      </>
+	                                    );
+	                                  })()}
                                 </div>
                               </div>
                               <div className="text-sm text-slate-400 mb-2">Донор: {system.donor.email}</div>
@@ -504,11 +535,60 @@ export default function AddClientSubscriptionPage() {
                   {selectedSystem && (
                     <div className="p-4 rounded-lg bg-purple-500/10 border border-purple-500/30">
                       <div className="text-sm text-purple-300">
-                        Клиент будет подключен к выбранной системе шеринга как {selectedConsoleType} клиент.
+		                        Клиент будет подключен к выбранной системе шеринга как {getSharingConsoleMeta(selectedConsoleType).label}.
                         Срок действия подписки соответствует сроку донорского аккаунта.
                       </div>
                     </div>
                   )}
+
+                  {selectedConsoleType === 'XBOX_1' ? (
+                    <div className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-4 text-sm leading-6 text-emerald-100">
+                      Для Xbox #1 клиент играет с донорского аккаунта. Данные донора подтянутся в личный кабинет автоматически, второй аккаунт вводить не нужно.
+                    </div>
+                  ) : null}
+
+                  {selectedConsoleType === 'XBOX_2' ? (
+                    <div className="space-y-3 rounded-lg border border-lime-500/30 bg-lime-500/10 p-4">
+                      <div>
+                        <div className="text-sm font-semibold text-lime-100">Личный аккаунт клиента</div>
+                        <div className="mt-1 text-xs leading-5 text-lime-100/80">
+                          Донор будет показан отдельно для входа. Здесь укажите аккаунт, с которого клиент будет запускать игры.
+                        </div>
+                      </div>
+                      <div>
+                        <label className="text-sm text-slate-300 mb-1.5 block">Логин личного аккаунта</label>
+                        <input
+                          type="text"
+                          value={emailLogin}
+                          onChange={(e) => setEmailLogin(e.target.value)}
+                          className="w-full rounded-lg bg-slate-800/50 border border-slate-600/50 px-3 py-2.5"
+                          placeholder="user@email.com"
+                          required
+                        />
+                      </div>
+                      <div>
+                        <label className="text-sm text-slate-300 mb-1.5 block">Пароль личного аккаунта</label>
+                        <input
+                          type="text"
+                          value={emailPassword}
+                          onChange={(e) => setEmailPassword(e.target.value)}
+                          className="w-full rounded-lg bg-slate-800/50 border border-slate-600/50 px-3 py-2.5"
+                          placeholder="••••••••"
+                          required
+                        />
+                      </div>
+                      <div>
+                        <label className="text-sm text-slate-300 mb-1.5 block">Пароль профиля личного аккаунта</label>
+                        <input
+                          type="text"
+                          value={accountPassword}
+                          onChange={(e) => setAccountPassword(e.target.value)}
+                          className="w-full rounded-lg bg-slate-800/50 border border-slate-600/50 px-3 py-2.5"
+                          placeholder="•••••••• (опционально)"
+                        />
+                      </div>
+                    </div>
+                  ) : null}
                 </div>
               )}
 

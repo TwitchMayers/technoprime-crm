@@ -2,8 +2,9 @@
 
 import { useAuth } from '@/contexts/AuthContext';
 import { useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 
-type Role = 'ADMIN' | 'MANAGER' | 'TECHNICAL_SPECIALIST' | 'SUPER_ADMIN' | 'RICHMARKET_CEO' | 'RICHMARKET_MANAGER';
+type Role = 'ADMIN' | 'MANAGER' | 'TECHNICAL_SPECIALIST' | 'SUPER_ADMIN';
 
 export default function ProtectedRoute({
   children,
@@ -12,13 +13,14 @@ export default function ProtectedRoute({
   children: React.ReactNode;
   allowedRoles?: Role[];
 }) {
+  const router = useRouter();
   const { user, loading, isAuthenticated } = useAuth();
 
   useEffect(() => {
     if (!loading && !isAuthenticated) {
-      console.log('Not authenticated, will redirect from middleware');
+      router.replace('/login');
     }
-  }, [loading, isAuthenticated]);
+  }, [loading, isAuthenticated, router]);
 
   if (loading) {
     return (
@@ -32,7 +34,14 @@ export default function ProtectedRoute({
   }
 
   if (!isAuthenticated) {
-    return null; // Middleware сделает редирект
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-center">
+          <div className="animate-spin w-10 h-10 border-4 border-cyan-500 border-t-transparent rounded-full mx-auto mb-4"></div>
+          <div className="text-slate-400">Перенаправление на страницу входа...</div>
+        </div>
+      </div>
+    );
   }
 
   // SUPER_ADMIN имеет доступ ко всему

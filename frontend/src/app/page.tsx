@@ -1,12 +1,8 @@
-'use client';
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
 
-import ProtectedRoute from '@/components/ProtectedRoute';
-
-export default function DashboardPage() {
-  return (
-    <ProtectedRoute allowedRoles={['ADMIN', 'MANAGER', 'SUPER_ADMIN', 'TECHNICAL_SPECIALIST']}>
-      {/* Ваш контент дашборда */}
-      <div>Dashboard Content</div>
-    </ProtectedRoute>
-  );
+export default function RootPage() {
+  // Root routing is handled by middleware to avoid duplicate redirects
+  // and header races on Safari/PWA restores.
+  return null;
 }

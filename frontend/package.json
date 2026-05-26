@@ -3,10 +3,10 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev --turbopack",
+    "dev": "next dev --webpack",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint",
+    "lint": "eslint .",
     "clean": "rm -rf .next node_modules/.cache"
   },
   "dependencies": {
@@ -20,26 +20,26 @@
     "@mui/x-date-pickers": "^8.14.1",
     "@tanstack/react-query": "^5.90.5",
     "@tanstack/react-query-devtools": "^5.90.2",
-    "axios": "^1.12.2",
+    "axios": "1.16.1",
+    "babel-plugin-react-compiler": "^1.0.0",
     "dayjs": "^1.11.18",
     "framer-motion": "^12.23.24",
+    "jsbarcode": "^3.12.3",
     "lucide-react": "^0.546.0",
-    "next": "16.0.0",
+    "next": "16.3.0-canary.28",
     "notistack": "^3.0.2",
-    "react": "19.2.0",
-    "react-dom": "19.2.0",
+    "react": "19.2.4",
+    "react-dom": "19.2.4",
     "react-hook-form": "^7.65.0",
-    "react-spring": "^10.0.3",
     "react-virtualized-auto-sizer": "^1.0.26",
     "react-virtuoso": "^4.14.1",
     "react-window": "^2.2.1",
     "recharts": "^3.3.0",
-    "socket.io-client": "^4.8.1",
+    "socket.io-client": "4.8.3",
     "sonner": "^2.0.7",
-    "swiper": "^12.0.3",
+    "swiper": "12.1.4",
     "zod": "^4.1.12",
-    "zustand": "^5.0.8",
-    "jsbarcode": "^3.12.3"
+    "zustand": "^5.0.8"
   },
   "devDependencies": {
     "@types/node": "^20",
@@ -47,9 +47,20 @@
     "@types/react-dom": "^19",
     "autoprefixer": "10.4.20",
     "eslint": "^9",
-    "eslint-config-next": "16.0.0",
-    "postcss": "8.4.47",
+    "eslint-config-next": "16.3.0-canary.28",
+    "postcss": "8.5.15",
     "tailwindcss": "3.4.14",
     "typescript": "^5"
+  },
+  "overrides": {
+    "engine.io-client": "6.6.5",
+    "socket.io-parser": "4.2.6",
+    "ws": "8.21.0",
+    "cosmiconfig": {
+      "yaml": "1.10.3"
+    },
+    "postcss-load-config": {
+      "yaml": "2.8.3"
+    }
   }
 }

@@ -1,5 +1,6 @@
 generator client {
-  provider = "prisma-client-js"
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "debian-openssl-3.0.x"]
 }
 
 datasource db {
@@ -10,7 +11,6 @@ datasource db {
 // === ENUMS ===
 enum Tenant {
   TECHNOPRIME
-  RICHMARKET
 }
 
 enum Role {
@@ -18,8 +18,6 @@ enum Role {
   MANAGER
   TECHNICAL_SPECIALIST
   SUPER_ADMIN
-  RICHMARKET_CEO
-  RICHMARKET_MANAGER
 }
 
 enum Position {
@@ -40,11 +38,18 @@ enum OrderStatus {
   IN_PROGRESS
   COMPLETED
   CANCELED
+  RETURNED
+}
+
+enum OrderSource {
+  STORE
+  MANUAL
 }
 
 enum TaskType {
   CALL
   DELIVERY
+  LOGISTICS
   SUBSCRIPTION_RENEWAL
   TRADE_IN
   OTHER
@@ -75,24 +80,9 @@ enum ProductCategory {
   SUBSCRIPTION_KEY
 }
 
-enum ClothingCategory {
-  JACKET
-  JEANS
-  TSHIRT
-  VEST
-  SHIRT
-  SHORTS
-  HAT
-}
-
-enum ClothingSize {
-  XS
-  S
-  M
-  L
-  XL
-  XXL
-  XXXL
+enum ProductCondition {
+  NEW
+  USED
 }
 
 enum DeliveryService {
@@ -101,6 +91,88 @@ enum DeliveryService {
   POST_RUSSIA
   FIVEPOST
   CDEK
+}
+
+enum SalesChannel {
+  WEBSITE
+  RETAIL
+  AVITO
+  OZON
+  OTHER
+}
+
+enum FulfillmentMethod {
+  LOCAL_DELIVERY
+  TRANSPORT_COMPANY
+}
+
+enum ShipmentCarrier {
+  AVITO_DELIVERY
+  AVITO_CDEK
+  AVITO_YANDEX
+  AVITO_POST_RUSSIA
+  CDEK_PERSONAL
+  YANDEX_DELIVERY
+  OZON_DELIVERY
+  POST_RUSSIA
+  OTHER
+}
+
+enum ShipmentStatus {
+  NOT_REQUIRED
+  AWAITING_SHIPMENT_DATA
+  READY_FOR_HANDOVER
+  HANDED_TO_CARRIER
+  IN_TRANSIT
+  ARRIVED_AT_PICKUP_POINT
+  AWAITING_CUSTOMER_PICKUP
+  RECEIVED_BY_CUSTOMER
+  RETURN_IN_TRANSIT
+  RETURNED_TO_SELLER
+  DELIVERY_ISSUE
+  CANCELED
+}
+
+enum SettlementStatus {
+  NOT_REQUIRED
+  AWAITING_PAYMENT
+  PAID
+  AWAITING_CUSTOMER_RECEIPT
+  AWAITING_FUNDS_RECEIPT
+  FUNDS_RECEIVED
+  REFUND_PENDING
+  REFUNDED
+  CANCELED
+}
+
+enum ShipmentSyncMode {
+  MANUAL
+  API
+  WEBHOOK
+}
+
+enum MarketplacePlatform {
+  AVITO
+  OZON
+  YANDEX_DELIVERY
+  CDEK
+}
+
+enum MarketplaceAuthType {
+  MANUAL
+  OAUTH
+  API_KEY
+}
+
+enum MarketplaceAccountStatus {
+  CONNECTED
+  DISCONNECTED
+  ERROR
+}
+
+enum MediaKind {
+  IMAGE
+  VIDEO
 }
 
 enum AdSku {
@@ -130,6 +202,8 @@ enum AccountType {
 enum ConsoleType {
   PS4
   PS5
+  XBOX_1
+  XBOX_2
 }
 
 enum SubscriptionPeriod {
@@ -138,118 +212,305 @@ enum SubscriptionPeriod {
   YEAR
 }
 
+enum InventoryUnitStatus {
+  AVAILABLE
+  RESERVED
+  HANDOVER_PENDING
+  IN_TRANSIT
+  DELIVERED
+  RETURN_IN_TRANSIT
+  SOLD
+  RETURNED
+  WRITEOFF
+}
+
+enum CommunicationChannel {
+  TELEGRAM
+  VK
+  MAX
+  WEBSITE
+}
+
+enum MarketingCampaignStatus {
+  DRAFT
+  SENT
+}
+
+enum MarketingAudienceType {
+  ALL
+  ACTIVE_ORDERS
+  SUBSCRIPTIONS
+  REGISTERED_RANGE
+}
+
+enum MarketingDeliveryStatus {
+  SENT
+  FAILED
+}
+
+enum EmployeeShiftStatus {
+  OPEN
+  CLOSED
+}
+
+enum EmployeeSaleCreditSource {
+  ORDER
+  MANUAL
+}
+
 // === MODELS ===
 
 model Employee {
-  id                   Int            @id @default(autoincrement())
-  name                 String
-  firstName            String?
-  lastName             String?
-  position             Position?
-  login                String         @unique
-  passwordHash         String
-  role                 Role           @default(MANAGER)
-  tenant               Tenant?
-  createdAt            DateTime       @default(now())
-  
-  orders               Order[]        @relation("OrderManager")
-  createdOrders        Order[]        @relation("OrderCreator")
-  tasks                Task[]         @relation("TaskAssignedTo")
-  managedSubscriptions Subscription[] @relation("SubscriptionManager")
-  comments             OrderComment[]
-  notifications        Notification[]
-  rmOrders             RichMarketOrder[]       @relation("RMOrderManager")
-  rmCreatedOrders      RichMarketOrder[]       @relation("RMOrderCreator")
-  rmComments           RichMarketOrderComment[]
-  rmTasks              RichMarketTask[]        @relation("RMTaskAssignedTo")
+  id           Int       @id @default(autoincrement())
+  name         String
+  firstName    String?
+  lastName     String?
+  phone        String?   @unique
+  position     Position?
+  login        String    @unique
+  passwordHash String
+  role         Role      @default(MANAGER)
+  tenant       Tenant?
+  isActive     Boolean   @default(true)
+  createdAt    DateTime  @default(now())
+  lastLoginAt  DateTime?
+
+  orders                  Order[]                  @relation("OrderManager")
+  createdOrders           Order[]                  @relation("OrderCreator")
+  tasks                   Task[]                   @relation("TaskAssignedTo")
+  acceptedTasks           Task[]                   @relation("TaskAcceptedBy")
+  managedSubscriptions    Subscription[]           @relation("SubscriptionManager")
+  comments                OrderComment[]
+  notifications           Notification[]
+  telegramCrmLink         TelegramCrmLink?
+  marketingCampaigns      MarketingCampaign[]
+  communicationLogs       ClientCommunicationLog[]
+  auditLogs               AuditLog[]
+  shipmentEvents          ShipmentEvent[]
+  orderCustomerLinkTokens OrderCustomerLinkToken[]
+  marketplaceAccounts     MarketplaceAccount[]
+  pinnedChats             EmployeePinnedChat[]
+  hiddenMarketplaceMessages MarketplaceHiddenMessage[]
+  pushSubscriptions       PushSubscription[]
+  shifts                  EmployeeShift[]          @relation("EmployeeShifts")
+  startedShifts           EmployeeShift[]          @relation("EmployeeShiftStartedBy")
+  endedShifts             EmployeeShift[]          @relation("EmployeeShiftEndedBy")
+  salesCredits            EmployeeSaleCredit[]     @relation("EmployeeSaleCredits")
+  createdSalesCredits     EmployeeSaleCredit[]     @relation("EmployeeSaleCreditCreatedBy")
+  createdInstructions     ConsoleInstruction[]     @relation("InstructionCreatedBy")
+  updatedInstructions     ConsoleInstruction[]     @relation("InstructionUpdatedBy")
+}
+
+model TelegramCrmLink {
+  id               Int      @id @default(autoincrement())
+  employeeId       Int      @unique
+  telegramUserId   String   @unique
+  telegramChatId   String   @unique
+  telegramUsername String?
+  isActive         Boolean  @default(true)
+  lastSeenOrderId  Int      @default(0)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @default(now()) @updatedAt
+
+  employee Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@index([isActive])
 }
 
 model Client {
-  id              Int            @id @default(autoincrement())
-  tenant          Tenant         @default(TECHNOPRIME)
-  name            String
-  phone           String
-  city            String?
-  address         String?
-  consoleType     String?
-  notes           String?
-  status          String?
-  emailLogin      String?
-  emailPassword   String?
-  accountPassword String?
-  createdAt       DateTime       @default(now())
-  
-  orders          Order[]
-  subscriptions   Subscription[]
-  tasks           Task[]         @relation("TaskClient")
-  tradeIns        TradeIn[]      @relation("ClientTradeIns")
-  clientSlots     ClientSlot[]
+  id               Int      @id @default(autoincrement())
+  tenant           Tenant   @default(TECHNOPRIME)
+  name             String
+  phone            String
+  telegramId       String?
+  vkId             String?
+  maxId            String?
+  marketingConsent Boolean  @default(false)
+  city             String?
+  address          String?
+  consoleType      String?
+  notes            String?
+  status           String?
+  emailLogin       String?
+  emailPassword    String?
+  accountPassword  String?
+  createdAt        DateTime @default(now())
+
+  orders            Order[]
+  subscriptions     Subscription[]
+  tasks             Task[]                   @relation("TaskClient")
+  tradeIns          TradeIn[]                @relation("ClientTradeIns")
+  clientSlots       ClientSlot[]
+  marketingLogs     MarketingCampaignLog[]
+  communicationLogs ClientCommunicationLog[]
 
   @@index([tenant, phone])
+  @@index([tenant, telegramId])
+  @@index([tenant, vkId])
+  @@index([tenant, maxId])
+  @@index([tenant, marketingConsent])
 }
 
 model Product {
-  id           Int             @id @default(autoincrement())
-  tenant       Tenant          @default(TECHNOPRIME)
-  name         String
-  category     ProductCategory
-  brand        String?
-  model        String?
-  version      String?
-  stock        Int             @default(0)
-  costPrice    Decimal         @db.Decimal(10, 2)
-  price        Decimal         @db.Decimal(10, 2)
-  isActive     Boolean         @default(true)
-  isArchived   Boolean         @default(false)
-  serialNumber String?         @unique
-  inStock      Boolean         @default(true)
-  archivedAt   DateTime?
-  adSku        AdSku?
-  
-  kitItems     KitItem[]
-  orderItems   OrderItem[]
+  id                 Int              @id @default(autoincrement())
+  tenant             Tenant           @default(TECHNOPRIME)
+  name               String
+  category           ProductCategory
+  condition          ProductCondition @default(USED)
+  brand              String?
+  model              String?
+  version            String?
+  slug               String?          @unique
+  shortDescription   String?
+  description        String?
+  coverImage         String?
+  previewImage       String?
+  gallery            Json?
+  seoTitle           String?
+  seoDescription     String?
+  publishedAt        DateTime?
+  stock              Int              @default(0)
+  costPrice          Decimal          @db.Decimal(10, 2)
+  price              Decimal          @db.Decimal(10, 2)
+  isActive           Boolean          @default(true)
+  isArchived         Boolean          @default(false)
+  storefrontCategory String?
+  catalogMainKey     String?
+  catalogSubKey      String?
+  catalogFamilyKey   String?
+  isAlwaysAvailable  Boolean          @default(false)
+  variants           Json?
+  serialNumber       String?          @unique
+  inStock            Boolean          @default(true)
+  archivedAt         DateTime?
+  adSku              AdSku?
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @default(now()) @updatedAt
+
+  kitItems                 KitItem[]
+  orderItems               OrderItem[]
+  media                    ProductMedia[]
+  inventoryUnits           InventoryUnit[]    @relation("WarehouseInventoryUnits")
+  storefrontInventoryUnits InventoryUnit[]    @relation("StorefrontInventoryUnits")
+  viewEvents               ProductViewEvent[]
+  featuredItems            ShopFeaturedItem[] // ← ДОБАВЛЕНО: обратная связь для ShopFeaturedItem
 
   @@index([tenant, isArchived, category])
+  @@index([tenant, storefrontCategory])
+  @@index([tenant, catalogMainKey, catalogSubKey, catalogFamilyKey])
+}
+
+model ProductMedia {
+  id        Int       @id @default(autoincrement())
+  productId Int
+  kind      MediaKind @default(IMAGE)
+  url       String
+  alt       String?
+  position  Int       @default(0)
+  createdAt DateTime  @default(now())
+
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@index([productId, position])
 }
 
 model Order {
-  id                Int            @id @default(autoincrement())
-  tenant            Tenant         @default(TECHNOPRIME)
-  date              DateTime       @default(now())
-  clientId          Int
-  managerId         Int?
-  createdById       Int
-  status            OrderStatus    @default(NEW)
-  paymentMethod     PaymentMethod
-  totalPrice        Decimal        @db.Decimal(10, 2)
-  costPrice         Decimal        @db.Decimal(10, 2)
-  profit            Decimal        @db.Decimal(10, 2)
-  comment           String?
-  archiveOnComplete Boolean        @default(false)
-  
-  client            Client         @relation(fields: [clientId], references: [id])
-  manager           Employee?      @relation("OrderManager", fields: [managerId], references: [id])
-  createdBy         Employee       @relation("OrderCreator", fields: [createdById], references: [id])
-  items             OrderItem[]
-  tradeIn           TradeIn?
-  comments          OrderComment[]
-  tasks             Task[]
+  id                    Int               @id @default(autoincrement())
+  tenant                Tenant            @default(TECHNOPRIME)
+  date                  DateTime          @default(now())
+  clientId              Int
+  shopCustomerId        Int?
+  managerId             Int?
+  createdById           Int
+  status                OrderStatus       @default(NEW)
+  source                OrderSource       @default(MANUAL)
+  salesChannel          SalesChannel      @default(RETAIL)
+  fulfillmentMethod     FulfillmentMethod @default(LOCAL_DELIVERY)
+  settlementStatus      SettlementStatus  @default(NOT_REQUIRED)
+  expectedPayout        Decimal?          @db.Decimal(10, 2)
+  actualPayout          Decimal?          @db.Decimal(10, 2)
+  marketplaceCommission Decimal?          @db.Decimal(10, 2)
+  reserveUntil          DateTime?
+  paymentMethod         PaymentMethod
+  totalPrice            Decimal           @db.Decimal(10, 2)
+  costPrice             Decimal           @db.Decimal(10, 2)
+  profit                Decimal           @db.Decimal(10, 2)
+  comment               String?
+  archiveOnComplete     Boolean           @default(false)
+
+  client             Client                   @relation(fields: [clientId], references: [id])
+  manager            Employee?                @relation("OrderManager", fields: [managerId], references: [id])
+  createdBy          Employee                 @relation("OrderCreator", fields: [createdById], references: [id])
+  items              OrderItem[]
+  tradeIn            TradeIn?
+  comments           OrderComment[]
+  tasks              Task[]
+  inventoryUnits     InventoryUnit[]
+  shipment           Shipment?
+  customerLinkTokens OrderCustomerLinkToken[]
+  salesCredits       EmployeeSaleCredit[]
 
   @@index([tenant, status])
+  @@index([tenant, source, reserveUntil])
+  @@index([tenant, salesChannel, fulfillmentMethod])
+  @@index([tenant, settlementStatus])
 }
 
 model OrderItem {
-  id        Int     @id @default(autoincrement())
-  orderId   Int
-  productId Int
-  qty       Int     @default(1)
-  unitPrice Decimal @db.Decimal(10, 2)
-  unitCost  Decimal @db.Decimal(10, 2)
-  lineTotal Decimal @db.Decimal(10, 2)
-  lineCost  Decimal @db.Decimal(10, 2)
-  
-  order     Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  product   Product @relation(fields: [productId], references: [id])
+  id           Int     @id @default(autoincrement())
+  orderId      Int
+  productId    Int
+  variantKey   String?
+  variantLabel String?
+  qty          Int     @default(1)
+  unitPrice    Decimal @db.Decimal(10, 2)
+  unitCost     Decimal @db.Decimal(10, 2)
+  lineTotal    Decimal @db.Decimal(10, 2)
+  lineCost     Decimal @db.Decimal(10, 2)
+
+  order          Order           @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product        Product         @relation(fields: [productId], references: [id])
+  inventoryUnits InventoryUnit[]
+}
+
+model InventoryUnit {
+  id                  Int                 @id @default(autoincrement())
+  tenant              Tenant              @default(TECHNOPRIME)
+  productId           Int
+  storefrontProductId Int?
+  category            ProductCategory
+  brand               String?
+  model               String?
+  version             String?
+  displayName         String?
+  serialNumber        String?             @unique
+  variantKey          String?
+  variantLabel        String?
+  memoryGb            Int?
+  status              InventoryUnitStatus @default(AVAILABLE)
+  attachedAt          DateTime            @default(now())
+  reservedAt          DateTime?
+  soldAt              DateTime?
+  orderId             Int?
+  orderItemId         Int?
+  purchasePrice       Decimal?            @db.Decimal(10, 2)
+  salePrice           Decimal?            @db.Decimal(10, 2)
+  previousSalePrice   Decimal?            @db.Decimal(10, 2)
+  notes               String?
+  createdAt           DateTime            @default(now())
+  updatedAt           DateTime            @default(now()) @updatedAt
+
+  product           Product    @relation("WarehouseInventoryUnits", fields: [productId], references: [id], onDelete: Cascade)
+  storefrontProduct Product?   @relation("StorefrontInventoryUnits", fields: [storefrontProductId], references: [id], onDelete: SetNull)
+  order             Order?     @relation(fields: [orderId], references: [id], onDelete: SetNull)
+  orderItem         OrderItem? @relation(fields: [orderItemId], references: [id], onDelete: SetNull)
+
+  @@index([tenant, productId, status, attachedAt])
+  @@index([tenant, storefrontProductId, status, attachedAt])
+  @@index([tenant, status, attachedAt])
+  @@index([tenant, serialNumber])
+  @@index([orderId])
+  @@index([orderItemId])
 }
 
 model OrderComment {
@@ -258,9 +519,287 @@ model OrderComment {
   authorId  Int
   text      String
   createdAt DateTime @default(now())
-  
-  order     Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  author    Employee @relation(fields: [authorId], references: [id])
+
+  order  Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  author Employee @relation(fields: [authorId], references: [id])
+}
+
+model Shipment {
+  id                  Int              @id @default(autoincrement())
+  tenant              Tenant           @default(TECHNOPRIME)
+  orderId             Int              @unique
+  carrier             ShipmentCarrier
+  status              ShipmentStatus   @default(AWAITING_SHIPMENT_DATA)
+  syncMode            ShipmentSyncMode @default(MANUAL)
+  externalOrderNumber String?
+  trackingNumber      String?
+  barcode             String?
+  senderPoint         String?
+  receiverPoint       String?
+  expectedDeliveryAt  DateTime?
+  handedOverAt        DateTime?
+  arrivedAt           DateTime?
+  receivedAt          DateTime?
+  returnedAt          DateTime?
+  lastSyncedAt        DateTime?
+  managerComment      String?
+  customerNote        String?
+  createdAt           DateTime         @default(now())
+  updatedAt           DateTime         @default(now()) @updatedAt
+
+  order  Order           @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  events ShipmentEvent[]
+
+  @@index([tenant, status])
+  @@index([tenant, carrier])
+  @@index([tenant, trackingNumber])
+  @@index([tenant, externalOrderNumber])
+}
+
+model ShipmentEvent {
+  id          Int              @id @default(autoincrement())
+  tenant      Tenant           @default(TECHNOPRIME)
+  shipmentId  Int
+  status      ShipmentStatus
+  source      ShipmentSyncMode @default(MANUAL)
+  title       String
+  comment     String?
+  rawPayload  Json?
+  createdById Int?
+  createdAt   DateTime         @default(now())
+
+  shipment  Shipment  @relation(fields: [shipmentId], references: [id], onDelete: Cascade)
+  createdBy Employee? @relation(fields: [createdById], references: [id], onDelete: SetNull)
+
+  @@index([tenant, shipmentId, createdAt])
+}
+
+model OrderCustomerLinkToken {
+  id             Int       @id @default(autoincrement())
+  tenant         Tenant    @default(TECHNOPRIME)
+  orderId        Int
+  token          String    @unique
+  expiresAt      DateTime?
+  usedAt         DateTime?
+  shopCustomerId Int?
+  createdById    Int?
+  createdAt      DateTime  @default(now())
+
+  order        Order         @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  shopCustomer ShopCustomer? @relation(fields: [shopCustomerId], references: [id], onDelete: SetNull)
+  createdBy    Employee?     @relation(fields: [createdById], references: [id], onDelete: SetNull)
+
+  @@index([tenant, orderId])
+  @@index([tenant, shopCustomerId])
+}
+
+model MarketplaceAccount {
+  id                    Int                      @id @default(autoincrement())
+  tenant                Tenant                   @default(TECHNOPRIME)
+  platform              MarketplacePlatform
+  displayName           String
+  authType              MarketplaceAuthType      @default(MANUAL)
+  status                MarketplaceAccountStatus @default(CONNECTED)
+  externalAccountId     String?
+  clientId              String?
+  scopes                String?
+  accessTokenEncrypted  String?
+  refreshTokenEncrypted String?
+  apiKeyEncrypted       String?
+  expiresAt             DateTime?
+  connectedById         Int?
+  disconnectedAt        DateTime?
+  lastSyncAt            DateTime?
+  lastSyncError         String?
+  createdAt             DateTime                 @default(now())
+  updatedAt             DateTime                 @default(now()) @updatedAt
+
+  connectedBy          Employee?                         @relation(fields: [connectedById], references: [id], onDelete: SetNull)
+  balanceSnapshots     MarketplaceBalanceSnapshot[]
+  balanceOperations    MarketplaceBalanceOperation[]
+  listingDailyStats    MarketplaceListingDailyStat[]
+  conversationLearning MarketplaceConversationLearning[]
+  hiddenMessages       MarketplaceHiddenMessage[]
+  pinnedChats          EmployeePinnedChat[]
+
+  @@index([tenant, platform, status])
+}
+
+model EmployeePinnedChat {
+  id                   Int                 @id @default(autoincrement())
+  employeeId           Int
+  platform             MarketplacePlatform @default(AVITO)
+  marketplaceAccountId Int
+  chatId               String
+  createdAt            DateTime            @default(now())
+
+  employee           Employee           @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  marketplaceAccount MarketplaceAccount @relation(fields: [marketplaceAccountId], references: [id], onDelete: Cascade)
+
+  @@unique([employeeId, platform, marketplaceAccountId, chatId])
+  @@index([employeeId, platform, createdAt])
+  @@index([marketplaceAccountId, platform, createdAt])
+}
+
+model EmployeeShift {
+  id          Int                 @id @default(autoincrement())
+  employeeId  Int
+  startedAt   DateTime            @default(now())
+  endedAt     DateTime?
+  status      EmployeeShiftStatus @default(OPEN)
+  startedById Int?
+  endedById   Int?
+  note        String?
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @default(now()) @updatedAt
+
+  employee  Employee  @relation("EmployeeShifts", fields: [employeeId], references: [id], onDelete: Cascade)
+  startedBy Employee? @relation("EmployeeShiftStartedBy", fields: [startedById], references: [id], onDelete: SetNull)
+  endedBy   Employee? @relation("EmployeeShiftEndedBy", fields: [endedById], references: [id], onDelete: SetNull)
+
+  @@index([employeeId, startedAt])
+  @@index([employeeId, status])
+  @@index([startedById])
+  @@index([endedById])
+}
+
+model EmployeeSaleCredit {
+  id          Int                      @id @default(autoincrement())
+  employeeId  Int
+  source      EmployeeSaleCreditSource @default(MANUAL)
+  orderId     Int?
+  quantity    Int                      @default(1)
+  amount      Decimal                  @db.Decimal(10, 2)
+  note        String?
+  creditedAt  DateTime                 @default(now())
+  createdById Int?
+  createdAt   DateTime                 @default(now())
+  updatedAt   DateTime                 @default(now()) @updatedAt
+
+  employee  Employee  @relation("EmployeeSaleCredits", fields: [employeeId], references: [id], onDelete: Cascade)
+  createdBy Employee? @relation("EmployeeSaleCreditCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  order     Order?    @relation(fields: [orderId], references: [id], onDelete: SetNull)
+
+  @@unique([employeeId, orderId])
+  @@index([employeeId, creditedAt])
+  @@index([orderId])
+  @@index([createdById, creditedAt])
+}
+
+model MarketplaceBalanceSnapshot {
+  id                   Int                 @id @default(autoincrement())
+  tenant               Tenant              @default(TECHNOPRIME)
+  platform             MarketplacePlatform
+  marketplaceAccountId Int
+  date                 DateTime
+  realBalance          Decimal?            @db.Decimal(12, 2)
+  bonusBalance         Decimal?            @db.Decimal(12, 2)
+  payload              Json?
+  createdAt            DateTime            @default(now())
+  updatedAt            DateTime            @default(now()) @updatedAt
+
+  marketplaceAccount MarketplaceAccount @relation(fields: [marketplaceAccountId], references: [id], onDelete: Cascade)
+
+  @@unique([tenant, marketplaceAccountId, date])
+  @@index([tenant, platform, date])
+}
+
+model MarketplaceListingDailyStat {
+  id                   Int                 @id @default(autoincrement())
+  tenant               Tenant              @default(TECHNOPRIME)
+  platform             MarketplacePlatform
+  marketplaceAccountId Int
+  externalItemId       String
+  statDate             DateTime
+  title                String
+  url                  String?
+  priceLabel           String?
+  statusLabel          String?
+  services             Json?
+  uniqViews            Int                 @default(0)
+  uniqFavorites        Int                 @default(0)
+  uniqContacts         Int                 @default(0)
+  startAt              DateTime?
+  finishAt             DateTime?
+  payload              Json?
+  createdAt            DateTime            @default(now())
+  updatedAt            DateTime            @default(now()) @updatedAt
+
+  marketplaceAccount MarketplaceAccount @relation(fields: [marketplaceAccountId], references: [id], onDelete: Cascade)
+
+  @@unique([tenant, marketplaceAccountId, externalItemId, statDate])
+  @@index([tenant, platform, statDate])
+  @@index([tenant, externalItemId, statDate])
+}
+
+model MarketplaceBalanceOperation {
+  id                   Int                 @id @default(autoincrement())
+  tenant               Tenant              @default(TECHNOPRIME)
+  platform             MarketplacePlatform
+  marketplaceAccountId Int
+  operationKey         String
+  paidAt               DateTime
+  itemExternalId       String?
+  operationName        String?
+  operationType        String?
+  serviceId            Int?
+  serviceName          String?
+  serviceType          String?
+  amountRub            Decimal             @default(0) @db.Decimal(12, 2)
+  amountBonus          Decimal             @default(0) @db.Decimal(12, 2)
+  amountTotal          Decimal             @default(0) @db.Decimal(12, 2)
+  payload              Json?
+  importedAt           DateTime            @default(now())
+
+  marketplaceAccount MarketplaceAccount @relation(fields: [marketplaceAccountId], references: [id], onDelete: Cascade)
+
+  @@unique([tenant, marketplaceAccountId, operationKey])
+  @@index([tenant, platform, paidAt])
+  @@index([tenant, itemExternalId, paidAt])
+}
+
+model MarketplaceConversationLearning {
+  id                   Int                 @id @default(autoincrement())
+  tenant               Tenant              @default(TECHNOPRIME)
+  platform             MarketplacePlatform
+  marketplaceAccountId Int
+  chatId               String
+  messageExternalId    String
+  itemExternalId       String?
+  itemTitle            String?
+  priceLabel           String?
+  counterpartName      String?
+  direction            String
+  messageType          String?
+  text                 String?
+  hasImage             Boolean             @default(false)
+  payload              Json?
+  messageAt            DateTime
+  importedAt           DateTime            @default(now())
+
+  marketplaceAccount MarketplaceAccount @relation(fields: [marketplaceAccountId], references: [id], onDelete: Cascade)
+
+  @@unique([tenant, marketplaceAccountId, messageExternalId])
+  @@index([tenant, platform, messageAt])
+  @@index([tenant, itemExternalId, messageAt])
+}
+
+model MarketplaceHiddenMessage {
+  id                   Int                 @id @default(autoincrement())
+  tenant               Tenant              @default(TECHNOPRIME)
+  platform             MarketplacePlatform @default(AVITO)
+  marketplaceAccountId Int
+  chatId               String
+  messageExternalId    String
+  hiddenById           Int?
+  hiddenAt             DateTime            @default(now())
+
+  marketplaceAccount MarketplaceAccount @relation(fields: [marketplaceAccountId], references: [id], onDelete: Cascade)
+  hiddenBy           Employee?          @relation(fields: [hiddenById], references: [id], onDelete: SetNull)
+
+  @@unique([tenant, marketplaceAccountId, chatId, messageExternalId])
+  @@index([tenant, platform, hiddenAt])
+  @@index([hiddenById, hiddenAt])
 }
 
 model Subscription {
@@ -281,11 +820,11 @@ model Subscription {
   clientSlotId       Int?               @unique
   donorAccountId     Int?
   createdAt          DateTime           @default(now())
-  
-  client             Client             @relation(fields: [clientId], references: [id])
-  manager            Employee?          @relation("SubscriptionManager", fields: [managerId], references: [id])
-  clientSlot         ClientSlot?        @relation(fields: [clientSlotId], references: [id])
-  donorAccount       DonorAccount?      @relation(fields: [donorAccountId], references: [id])
+
+  client       Client        @relation(fields: [clientId], references: [id])
+  manager      Employee?     @relation("SubscriptionManager", fields: [managerId], references: [id])
+  clientSlot   ClientSlot?   @relation(fields: [clientSlotId], references: [id])
+  donorAccount DonorAccount? @relation(fields: [donorAccountId], references: [id])
 
   @@index([tenant, status])
   @@index([tenant, accountType, status])
@@ -297,18 +836,22 @@ model Task {
   title        String
   type         TaskType
   assignedToId Int
+  acceptedById Int?
   clientId     Int?
   orderId      Int?
   dueDate      DateTime
   status       TaskStatus @default(NEW)
   comment      String?
+  acceptedAt   DateTime?
   createdAt    DateTime   @default(now())
-  
-  assignedTo   Employee   @relation("TaskAssignedTo", fields: [assignedToId], references: [id])
-  client       Client?    @relation("TaskClient", fields: [clientId], references: [id])
-  order        Order?     @relation(fields: [orderId], references: [id])
+
+  assignedTo Employee  @relation("TaskAssignedTo", fields: [assignedToId], references: [id])
+  acceptedBy Employee? @relation("TaskAcceptedBy", fields: [acceptedById], references: [id])
+  client     Client?   @relation("TaskClient", fields: [clientId], references: [id])
+  order      Order?    @relation(fields: [orderId], references: [id])
 
   @@index([tenant, status])
+  @@index([tenant, acceptedById])
 }
 
 model TradeIn {
@@ -320,29 +863,30 @@ model TradeIn {
   surcharge      Decimal  @db.Decimal(10, 2)
   newOrderId     Int?     @unique
   createdAt      DateTime @default(now())
-  
-  client         Client   @relation("ClientTradeIns", fields: [clientId], references: [id])
-  newOrder       Order?   @relation(fields: [newOrderId], references: [id])
+
+  client   Client @relation("ClientTradeIns", fields: [clientId], references: [id])
+  newOrder Order? @relation(fields: [newOrderId], references: [id])
 }
 
 model Kit {
-  id        Int       @id @default(autoincrement())
-  tenant    Tenant    @default(TECHNOPRIME)
+  id        Int      @id @default(autoincrement())
+  tenant    Tenant   @default(TECHNOPRIME)
   name      String
   tier      KitTier
-  createdAt DateTime  @default(now())
-  
-  items     KitItem[]
+  createdAt DateTime @default(now())
+
+  items         KitItem[]
+  featuredItems ShopFeaturedItem[] // ← ДОБАВЛЕНО: обратная связь для ShopFeaturedItem
 }
 
 model KitItem {
-  id        Int     @id @default(autoincrement())
+  id        Int @id @default(autoincrement())
   kitId     Int
   productId Int
-  qty       Int     @default(1)
-  
-  kit       Kit     @relation(fields: [kitId], references: [id], onDelete: Cascade)
-  product   Product @relation(fields: [productId], references: [id])
+  qty       Int @default(1)
+
+  kit     Kit     @relation(fields: [kitId], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [productId], references: [id])
 }
 
 model AnalyticsDaily {
@@ -366,10 +910,50 @@ model Notification {
   payload   Json?
   readAt    DateTime?
   createdAt DateTime  @default(now())
-  
-  user      Employee  @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  user Employee @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, readAt])
+}
+
+model PushSubscription {
+  id         Int       @id @default(autoincrement())
+  userId     Int
+  endpoint   String    @unique
+  p256dh     String
+  auth       String
+  userAgent  String?
+  disabledAt DateTime?
+  lastUsedAt DateTime?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @default(now()) @updatedAt
+
+  user Employee @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, disabledAt])
+}
+
+model ConsoleInstruction {
+  id            Int      @id @default(autoincrement())
+  tenant        Tenant   @default(TECHNOPRIME)
+  consoleKey    String
+  consoleLabel  String
+  title         String
+  subtitle      String?
+  searchAliases Json?
+  sections      Json
+  isPublished   Boolean  @default(true)
+  sortOrder     Int      @default(0)
+  createdById   Int?
+  updatedById   Int?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @default(now()) @updatedAt
+
+  createdBy Employee? @relation("InstructionCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  updatedBy Employee? @relation("InstructionUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
+
+  @@unique([tenant, consoleKey])
+  @@index([tenant, isPublished, sortOrder])
 }
 
 model AdSpend {
@@ -396,153 +980,26 @@ model AuditLog {
   newData    Json?
   createdAt  DateTime @default(now())
 
+  user Employee? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
   @@index([userId, createdAt])
-}
-
-// === RICHMARKET ===
-
-model RichMarketClient {
-  id        Int               @id @default(autoincrement())
-  tenant    Tenant            @default(RICHMARKET)
-  name      String
-  phone     String
-  city      String?
-  address   String?
-  notes     String?
-  createdAt DateTime          @default(now())
-  
-  orders    RichMarketOrder[]
-  tasks     RichMarketTask[]
-
-  @@index([tenant, phone])
-}
-
-model RichMarketProduct {
-  id          Int                     @id @default(autoincrement())
-  tenant      Tenant                  @default(RICHMARKET)
-  brand       String
-  category    ClothingCategory
-  color       String
-  imageUrl    String?
-  description String?
-  isActive    Boolean                 @default(true)
-  isArchived  Boolean                 @default(false)
-  archivedAt  DateTime?
-  costPrice   Decimal                 @db.Decimal(10, 2)
-  price       Decimal                 @db.Decimal(10, 2)
-  createdAt   DateTime                @default(now())
-  updatedAt   DateTime                @updatedAt
-  
-  sizes       RichMarketProductSize[]
-  orderItems  RichMarketOrderItem[]
-
-  @@unique([tenant, brand, category, color])
-  @@index([tenant, category, brand])
-  @@index([tenant, isArchived])
-}
-
-model RichMarketProductSize {
-  id        Int               @id @default(autoincrement())
-  productId Int
-  size      ClothingSize
-  stock     Int               @default(0)
-  createdAt DateTime          @default(now())
-  
-  product   RichMarketProduct @relation(fields: [productId], references: [id], onDelete: Cascade)
-
-  @@unique([productId, size])
-}
-
-model RichMarketOrder {
-  id              Int                      @id @default(autoincrement())
-  tenant          Tenant                   @default(RICHMARKET)
-  date            DateTime                 @default(now())
-  clientId        Int
-  managerId       Int?
-  createdById     Int
-  status          OrderStatus              @default(NEW)
-  paymentMethod   PaymentMethod
-  totalPrice      Decimal                  @db.Decimal(10, 2)
-  costPrice       Decimal                  @db.Decimal(10, 2)
-  profit          Decimal                  @db.Decimal(10, 2)
-  comment         String?
-  deliveryService DeliveryService?
-  trackingCode    String?
-  deliveryAddress String?
-  
-  client          RichMarketClient         @relation(fields: [clientId], references: [id])
-  manager         Employee?                @relation("RMOrderManager", fields: [managerId], references: [id])
-  createdBy       Employee                 @relation("RMOrderCreator", fields: [createdById], references: [id])
-  items           RichMarketOrderItem[]
-  comments        RichMarketOrderComment[]
-  tasks           RichMarketTask[]
-
-  @@index([tenant, status])
-}
-
-model RichMarketOrderItem {
-  id        Int               @id @default(autoincrement())
-  orderId   Int
-  productId Int
-  size      ClothingSize
-  qty       Int               @default(1)
-  unitPrice Decimal           @db.Decimal(10, 2)
-  unitCost  Decimal           @db.Decimal(10, 2)
-  lineTotal Decimal           @db.Decimal(10, 2)
-  lineCost  Decimal           @db.Decimal(10, 2)
-  
-  order     RichMarketOrder   @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  product   RichMarketProduct @relation(fields: [productId], references: [id])
-
-  @@index([productId, size])
-}
-
-model RichMarketOrderComment {
-  id        Int             @id @default(autoincrement())
-  orderId   Int
-  authorId  Int
-  text      String
-  createdAt DateTime        @default(now())
-  
-  order     RichMarketOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  author    Employee        @relation(fields: [authorId], references: [id])
-}
-
-model RichMarketTask {
-  id           Int               @id @default(autoincrement())
-  tenant       Tenant            @default(RICHMARKET)
-  title        String
-  type         TaskType
-  assignedToId Int
-  clientId     Int?
-  orderId      Int?
-  dueDate      DateTime
-  status       TaskStatus        @default(NEW)
-  comment      String?
-  createdAt    DateTime          @default(now())
-  
-  assignedTo   Employee          @relation("RMTaskAssignedTo", fields: [assignedToId], references: [id])
-  client       RichMarketClient? @relation(fields: [clientId], references: [id])
-  order        RichMarketOrder?  @relation(fields: [orderId], references: [id])
-
-  @@index([tenant, status])
 }
 
 // === SHARING SYSTEM ===
 
 model SharingSystem {
-  id             Int          @id @default(autoincrement())
-  tenant         Tenant       @default(TECHNOPRIME)
+  id             Int      @id @default(autoincrement())
+  tenant         Tenant   @default(TECHNOPRIME)
   name           String
-  donorAccountId Int          @unique
-  totalSlots     Int          @default(3)
-  availableSlots Int          @default(2)
-  isActive       Boolean      @default(true)
-  createdAt      DateTime     @default(now())
-  updatedAt      DateTime     @updatedAt
-  
-  donor          DonorAccount @relation(fields: [donorAccountId], references: [id], onDelete: Cascade)
-  clientSlots    ClientSlot[]
+  donorAccountId Int      @unique
+  totalSlots     Int      @default(3)
+  availableSlots Int      @default(2)
+  isActive       Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @default(now()) @updatedAt
+
+  donor       DonorAccount @relation(fields: [donorAccountId], references: [id], onDelete: Cascade)
+  clientSlots ClientSlot[]
 
   @@index([tenant, isActive])
 }
@@ -552,7 +1009,7 @@ model DonorAccount {
   tenant             Tenant             @default(TECHNOPRIME)
   email              String
   password           String
-  consoleType        ConsoleType        // ✅ ИСПОЛЬЗУЕМ ConsoleType
+  consoleType        ConsoleType // ✅ ИСПОЛЬЗУЕМ ConsoleType
   startDate          DateTime
   endDate            DateTime
   subscriptionType   SubscriptionType
@@ -566,33 +1023,217 @@ model DonorAccount {
   backupCodes        String?
   notes              String?
   createdAt          DateTime           @default(now())
-  updatedAt          DateTime           @updatedAt
-  
-  sharingSystem      SharingSystem?
-  subscriptions      Subscription[]
+  updatedAt          DateTime           @default(now()) @updatedAt
+
+  sharingSystem SharingSystem?
+  subscriptions Subscription[]
 
   @@unique([tenant, email])
   @@index([tenant, isActive, endDate])
 }
 
 model ClientSlot {
-  id                    Int           @id @default(autoincrement())
-  sharingSystemId       Int
-  clientId              Int
-  consoleType           ConsoleType   // ✅ ИСПОЛЬЗУЕМ ConsoleType
-  emailLogin            String?
-  emailPassword         String?
-  accountPassword       String?
-  startDate             DateTime
-  endDate               DateTime
-  isActive              Boolean       @default(true)
-  notes                 String?
-  createdAt             DateTime      @default(now())
+  id              Int         @id @default(autoincrement())
+  sharingSystemId Int
+  clientId        Int
+  consoleType     ConsoleType // ✅ ИСПОЛЬЗУЕМ ConsoleType
+  emailLogin      String?
+  emailPassword   String?
+  accountPassword String?
+  startDate       DateTime
+  endDate         DateTime
+  isActive        Boolean     @default(true)
+  notes           String?
+  createdAt       DateTime    @default(now())
 
-  sharingSystem         SharingSystem @relation(fields: [sharingSystemId], references: [id], onDelete: Cascade)
-  client                Client        @relation(fields: [clientId], references: [id], onDelete: Cascade)
-  subscription          Subscription?
+  sharingSystem SharingSystem @relation(fields: [sharingSystemId], references: [id], onDelete: Cascade)
+  client        Client        @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  subscription  Subscription?
 
   // ✅ Уникальность на sharingSystemId + clientId + consoleType
   @@unique([sharingSystemId, clientId, consoleType])
+}
+
+// === SHOP (Storefront) ===
+
+model ShopCustomer {
+  id                     Int       @id @default(autoincrement())
+  phone                  String?   @unique
+  telegramId             String?   @unique
+  vkId                   String?
+  maxId                  String?
+  telegramUsername       String?
+  firstName              String?
+  lastName               String?
+  birthDate              DateTime?
+  deliveryCity           String?
+  deliveryAddress        String?
+  isBlocked              Boolean   @default(false)
+  blockedUntil           DateTime?
+  blockReason            String?
+  notifyOrderStatus      Boolean   @default(true)
+  notifySubscription     Boolean   @default(true)
+  notifyService          Boolean   @default(true)
+  notifyMarketing        Boolean   @default(true)
+  marketingConsent       Boolean   @default(true)
+  cookieConsentAt        DateTime?
+  cookieConsentVersion   String?
+  cookieConsentAnalytics Boolean   @default(false)
+  createdAt              DateTime  @default(now())
+  lastLoginAt            DateTime?
+
+  authCodes       ShopAuthCode[]
+  sessions        ShopSession[]
+  orderLinkTokens OrderCustomerLinkToken[]
+
+  @@index([phone])
+  @@index([telegramId])
+}
+
+model MarketingCampaign {
+  id             Int                     @id @default(autoincrement())
+  tenant         Tenant                  @default(TECHNOPRIME)
+  title          String
+  message        String
+  attachments    Json?
+  channels       CommunicationChannel[]
+  audienceType   MarketingAudienceType   @default(ALL)
+  registeredFrom DateTime?
+  registeredTo   DateTime?
+  status         MarketingCampaignStatus @default(DRAFT)
+  isSending      Boolean                 @default(false)
+  sentCount      Int                     @default(0)
+  errorCount     Int                     @default(0)
+  createdById    Int?
+  createdAt      DateTime                @default(now())
+  sentAt         DateTime?
+
+  createdBy Employee?              @relation(fields: [createdById], references: [id])
+  logs      MarketingCampaignLog[]
+
+  @@index([tenant, status, createdAt])
+  @@index([tenant, sentAt])
+  @@index([createdById])
+}
+
+model MarketingCampaignLog {
+  id           Int                     @id @default(autoincrement())
+  campaignId   Int
+  clientId     Int
+  channel      CommunicationChannel
+  status       MarketingDeliveryStatus
+  errorMessage String?
+  sentAt       DateTime                @default(now())
+
+  campaign MarketingCampaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  client   Client            @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  @@index([campaignId, sentAt])
+  @@index([campaignId, status])
+  @@index([clientId, channel])
+}
+
+model ClientCommunicationLog {
+  id               Int                     @id @default(autoincrement())
+  tenant           Tenant                  @default(TECHNOPRIME)
+  clientId         Int
+  channel          CommunicationChannel
+  status           MarketingDeliveryStatus
+  text             String?
+  attachments      Json?
+  errorMessage     String?
+  readByCustomerAt DateTime?
+  createdById      Int?
+  sentAt           DateTime                @default(now())
+
+  client    Client    @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  createdBy Employee? @relation(fields: [createdById], references: [id], onDelete: SetNull)
+
+  @@index([tenant, clientId, sentAt])
+  @@index([tenant, channel, sentAt])
+  @@index([tenant, status, sentAt])
+}
+
+model ShopTelegramConsent {
+  id               Int       @id @default(autoincrement())
+  telegramUserId   String    @unique
+  telegramChatId   String?
+  telegramUsername String?
+  policyVersion    String    @default("2026-02")
+  consentedAt      DateTime?
+  revokedAt        DateTime?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @default(now()) @updatedAt
+
+  @@index([consentedAt])
+}
+
+model ShopAuthCode {
+  id         Int       @id @default(autoincrement())
+  phone      String
+  codeHash   String
+  expiresAt  DateTime
+  createdAt  DateTime  @default(now())
+  usedAt     DateTime?
+  customerId Int?
+
+  customer ShopCustomer? @relation(fields: [customerId], references: [id])
+
+  @@index([phone])
+  @@index([expiresAt])
+}
+
+model ShopSession {
+  id         String    @id @default(uuid())
+  customerId Int
+  createdAt  DateTime  @default(now())
+  expiresAt  DateTime
+  revokedAt  DateTime?
+
+  customer ShopCustomer @relation(fields: [customerId], references: [id])
+
+  @@index([customerId])
+  @@index([expiresAt])
+}
+
+model ShopFeaturedItem {
+  id                Int       @id @default(autoincrement())
+  productId         Int?
+  kitId             Int?
+  title             String
+  subtitle          String?
+  badge             String?
+  priceOverride     Decimal?  @db.Decimal(10, 2)
+  promoBlock        Boolean   @default(false)
+  promoEnabled      Boolean   @default(false)
+  promoPrice        Decimal?  @db.Decimal(10, 2)
+  promoOldPrice     Decimal?  @db.Decimal(10, 2)
+  promoVariantKey   String?
+  promoVariantLabel String?
+  promoEndsAt       DateTime?
+  position          Int       @default(0)
+  isActive          Boolean   @default(true)
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @default(now()) @updatedAt
+
+  product Product? @relation(fields: [productId], references: [id])
+  kit     Kit?     @relation(fields: [kitId], references: [id])
+
+  @@index([isActive, position])
+  @@index([kitId])
+  @@index([promoBlock, promoEnabled, promoEndsAt])
+}
+
+model ProductViewEvent {
+  id        Int      @id @default(autoincrement())
+  tenant    Tenant   @default(TECHNOPRIME)
+  productId Int
+  cookieId  String?
+  viewedAt  DateTime @default(now())
+
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@index([tenant, viewedAt])
+  @@index([tenant, productId, viewedAt])
+  @@index([tenant, cookieId, viewedAt])
 }

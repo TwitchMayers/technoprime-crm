@@ -1,12 +1,28 @@
-import { Controller, Get, Post, Put, Delete, Body, Param, Query, UsePipes, ValidationPipe } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Put,
+  Delete,
+  Body,
+  Param,
+  Query,
+  UseGuards,
+  UsePipes,
+  ValidationPipe,
+} from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
 import { SharingSystemsService } from './sharing-systems.service';
 import { CreateSharingSystemDto } from './dto/create-sharing-system.dto';
 import { AssignClientSlotDto } from './dto/assign-client-slot.dto';
+import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+
+type SharingConsoleType = 'PS4' | 'PS5' | 'XBOX_1' | 'XBOX_2';
 
 @ApiTags('sharing-systems')
 @ApiBearerAuth()
 @Controller('sharing-systems')
+@UseGuards(JwtAuthGuard)
 @UsePipes(new ValidationPipe({ transform: true }))
 export class SharingSystemsController {
   constructor(private readonly sharingSystemsService: SharingSystemsService) {}
@@ -24,7 +40,7 @@ export class SharingSystemsController {
   list(
     @Query('isActive') isActive?: string,
     @Query('withAvailableSlots') withAvailableSlots?: string,
-    @Query('consoleType') consoleType?: 'PS4' | 'PS5',
+    @Query('consoleType') consoleType?: SharingConsoleType,
   ) {
     return this.sharingSystemsService.listSharingSystems({
       isActive: isActive ? isActive === 'true' : undefined,
@@ -42,10 +58,7 @@ export class SharingSystemsController {
   @Get('search-clients')
   @ApiOperation({ summary: 'Поиск клиентов для добавления в систему' })
   @ApiResponse({ status: 200, description: 'Результаты поиска клиентов' })
-  searchClients(
-    @Query('q') query: string,
-    @Query('sharingSystemId') sharingSystemId?: string,
-  ) {
+  searchClients(@Query('q') query: string, @Query('sharingSystemId') sharingSystemId?: string) {
     return this.sharingSystemsService.searchClients(query);
   }
 
@@ -83,7 +96,8 @@ export class SharingSystemsController {
   @ApiResponse({ status: 200, description: 'Данные донора обновлены' })
   updateDonorDetails(
     @Param('donorId') donorId: string,
-    @Body() data: {
+    @Body()
+    data: {
       email?: string;
       password?: string;
       region?: string;
@@ -93,7 +107,7 @@ export class SharingSystemsController {
       dateOfBirth?: string;
       backupCodes?: string;
       notes?: string;
-    }
+    },
   ) {
     return this.sharingSystemsService.updateDonorDetails(Number(donorId), data);
   }
@@ -101,10 +115,7 @@ export class SharingSystemsController {
   @Put('donor-account/:donorId/extend')
   @ApiOperation({ summary: 'Продлить подписку донорского аккаунта' })
   @ApiResponse({ status: 200, description: 'Подписка продлена' })
-  extendSubscription(
-    @Param('donorId') donorId: string,
-    @Body() data: { newEndDate: string },
-  ) {
+  extendSubscription(@Param('donorId') donorId: string, @Body() data: { newEndDate: string }) {
     return this.sharingSystemsService.extendDonorSubscription(Number(donorId), data.newEndDate);
   }
 
@@ -113,7 +124,8 @@ export class SharingSystemsController {
   @ApiResponse({ status: 200, description: 'Данные клиента обновлены' })
   async updateClientSlot(
     @Param('slotId') slotId: string,
-    @Body() body: {
+    @Body()
+    body: {
       emailLogin?: string;
       emailPassword?: string;
       accountPassword?: string;
@@ -122,10 +134,7 @@ export class SharingSystemsController {
       notes?: string;
     },
   ) {
-    return this.sharingSystemsService.updateClientSlotDetails(
-      Number(slotId),
-      body,
-    );
+    return this.sharingSystemsService.updateClientSlotDetails(Number(slotId), body);
   }
 
   @Get('system/:id/clients')
@@ -139,10 +148,11 @@ export class SharingSystemsController {
   @ApiOperation({ summary: 'Добавить клиента для доступа к донорской консоли' })
   @ApiResponse({ status: 201, description: 'Клиент добавлен к донору' })
   async assignDonorClient(
-    @Body() data: {
+    @Body()
+    data: {
       sharingSystemId: number;
       clientId: number;
-      consoleType: 'PS4' | 'PS5';
+      consoleType: SharingConsoleType;
       startDate: string;
       endDate: string;
       notes?: string;

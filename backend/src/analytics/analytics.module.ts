@@ -2,9 +2,13 @@ import { Module } from '@nestjs/common';
 import { AnalyticsService } from './analytics.service';
 import { AnalyticsController } from './analytics.controller';
 import { PrismaService } from '../prisma.service';
+import { AnalyticsMlService } from './analytics-ml.service';
+import { MarketplaceInsightsService } from './marketplace-insights.service';
+import { LogisticsModule } from '../logistics/logistics.module';
 
 @Module({
-  providers: [AnalyticsService, PrismaService],
+  imports: [LogisticsModule],
+  providers: [AnalyticsService, AnalyticsMlService, MarketplaceInsightsService, PrismaService],
   controllers: [AnalyticsController],
 })
 export class AnalyticsModule {}

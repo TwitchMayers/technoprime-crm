@@ -19,6 +19,8 @@ type Task = {
   comment: string;
   assignedToId: number;
   assignedTo?: { id: number; name: string };
+  acceptedBy?: { id: number; name: string };
+  acceptedAt?: string | null;
   clientId?: number;
   client?: { id: number; name: string; phone: string; email?: string };
   orderId?: number;
@@ -26,7 +28,11 @@ type Task = {
     id: number;
     totalPrice: string;
     status: string;
-    client: { id: number; name: string; phone: string };
+    source?: 'STORE' | 'MANUAL';
+    reserveUntil?: string | null;
+    paymentMethod?: string;
+    comment?: string | null;
+    client?: { id: number; name: string; phone: string; email?: string };
   };
   createdAt: string;
 };
@@ -41,6 +47,7 @@ export default function TaskDetailPage() {
   const [task, setTask] = useState<Task | null>(null);
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(false);
+  const [extendLoading, setExtendLoading] = useState<number | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
 
   useEffect(() => {
@@ -63,7 +70,12 @@ export default function TaskDetailPage() {
         return;
       }
 
-      setTask(taskData);
+      const normalizedTask: Task = {
+        ...(taskData as Task),
+        client: taskData.client || taskData.order?.client || undefined,
+      };
+
+      setTask(normalizedTask);
       console.log('Task loaded:', taskData.id);
     } catch (error) {
       console.error('Failed to load task:', error);
@@ -115,7 +127,7 @@ export default function TaskDetailPage() {
       toast.success('Заказ назначен вам');
       
       // Update task status
-      await updateTaskStatus('IN_PROGRESS');
+      await updateTaskStatus('IN_PROGRESS', true);
       
       console.log('Task updated to IN_PROGRESS');
     } catch (error) {
@@ -155,7 +167,10 @@ export default function TaskDetailPage() {
   };
 
   // Update task status
-  const updateTaskStatus = async (newStatus: 'NEW' | 'IN_PROGRESS' | 'DONE') => {
+  const updateTaskStatus = async (
+    newStatus: 'NEW' | 'IN_PROGRESS' | 'DONE',
+    acceptTask = false,
+  ) => {
     if (!taskId) return;
 
     try {
@@ -167,6 +182,7 @@ export default function TaskDetailPage() {
         body: JSON.stringify({
           status: newStatus,
           comment: task?.comment || '',
+          accept: acceptTask,
         }),
       });
 
@@ -218,6 +234,30 @@ export default function TaskDetailPage() {
     };
     return labels[status] || status;
   };
+
+  const extendReserve = async (minutes: 15 | 30) => {
+    if (!task?.order?.id) return;
+
+    setExtendLoading(minutes);
+    try {
+      await fetchWithAuth(`orders/${task.order.id}/extend-reserve`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ minutes }),
+      });
+      toast.success(`Бронь продлена на ${minutes} минут`);
+      await loadTask();
+    } catch (error: any) {
+      console.error('Failed to extend reserve:', error);
+      toast.error(error?.message || 'Не удалось продлить бронь');
+    } finally {
+      setExtendLoading(null);
+    }
+  };
+
+  const reserveActive =
+    Boolean(task?.order?.source === 'STORE' && task?.order?.status === 'NEW' && task?.order?.reserveUntil) &&
+    new Date(String(task?.order?.reserveUntil)).getTime() > Date.now();
 
   // Loading state
   if (loading) {
@@ -365,6 +405,31 @@ export default function TaskDetailPage() {
                       Задача завершена
                     </div>
                   )}
+
+                  {reserveActive ? (
+                    <>
+                      <motion.button
+                        whileHover={{ scale: 1.05 }}
+                        whileTap={{ scale: 0.95 }}
+                        onClick={() => void extendReserve(15)}
+                        disabled={extendLoading !== null}
+                        className="flex items-center gap-2 px-4 py-3 rounded-lg bg-sky-500/15 hover:bg-sky-500/25 border border-sky-500/30 text-sky-300 font-bold text-sm transition-all disabled:opacity-60"
+                        type="button"
+                      >
+                        {extendLoading === 15 ? 'Продлеваем...' : '+15 минут брони'}
+                      </motion.button>
+                      <motion.button
+                        whileHover={{ scale: 1.05 }}
+                        whileTap={{ scale: 0.95 }}
+                        onClick={() => void extendReserve(30)}
+                        disabled={extendLoading !== null}
+                        className="flex items-center gap-2 px-4 py-3 rounded-lg bg-indigo-500/15 hover:bg-indigo-500/25 border border-indigo-500/30 text-indigo-300 font-bold text-sm transition-all disabled:opacity-60"
+                        type="button"
+                      >
+                        {extendLoading === 30 ? 'Продлеваем...' : '+30 минут брони'}
+                      </motion.button>
+                    </>
+                  ) : null}
                 </div>
               </div>
             </div>
@@ -408,6 +473,14 @@ export default function TaskDetailPage() {
                         {task.order.client?.phone}
                       </p>
                     </div>
+                    {reserveActive ? (
+                      <div className="md:col-span-2">
+                        <p className="text-xs text-slate-400 mb-1">Бронь до</p>
+                        <p className="text-sm font-semibold text-sky-300">
+                          {new Date(String(task.order.reserveUntil)).toLocaleString('ru-RU')}
+                        </p>
+                      </div>
+                    ) : null}
                   </div>
 
                   <p className="text-xs text-slate-500 group-hover:text-slate-400 transition-colors">
@@ -483,10 +556,34 @@ export default function TaskDetailPage() {
                     Назначена на
                   </p>
                   <p className="text-sm font-semibold text-white">
-                    {task.assignedTo?.name || (
+                    {task.status === 'NEW' ? (
+                      'Ожидает принятия (админ/техник)'
+                    ) : task.assignedTo?.name || (
                       <span className="text-slate-500">Не назначена</span>
                     )}
                   </p>
+                </div>
+
+                <div className="h-px bg-slate-700/50"></div>
+
+                <div>
+                  <p className="text-xs text-slate-400 mb-1 uppercase tracking-wide font-semibold">
+                    Принял задачу
+                  </p>
+                  <p className="text-sm font-semibold text-white">
+                    {task.acceptedBy?.name || (task.status === 'NEW' ? 'Ещё не принята' : 'Не зафиксировано')}
+                  </p>
+                  {task.acceptedAt ? (
+                    <p className="mt-1 text-xs text-slate-500">
+                      {new Date(task.acceptedAt).toLocaleString('ru-RU', {
+                        day: '2-digit',
+                        month: '2-digit',
+                        year: 'numeric',
+                        hour: '2-digit',
+                        minute: '2-digit',
+                      })}
+                    </p>
+                  ) : null}
                 </div>
 
                 <div className="h-px bg-slate-700/50"></div>

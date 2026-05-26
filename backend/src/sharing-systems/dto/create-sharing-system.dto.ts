@@ -10,8 +10,8 @@ export class CreateSharingSystemDto {
   @IsString()
   donorPassword: string;
 
-  @IsEnum(['PS4', 'PS5'])
-  donorConsoleType: 'PS4' | 'PS5';
+  @IsEnum(['PS4', 'PS5', 'XBOX_1', 'XBOX_2'])
+  donorConsoleType: 'PS4' | 'PS5' | 'XBOX_1' | 'XBOX_2';
 
   @IsEnum(['PS_PLUS', 'GAME_PASS', 'EA_PLAY'])
   subscriptionType: 'PS_PLUS' | 'GAME_PASS' | 'EA_PLAY';

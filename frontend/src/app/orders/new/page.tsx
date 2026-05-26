@@ -2,19 +2,24 @@
 
 import React, { useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
-import { Plus, Trash, ArrowLeft, ShoppingCart } from 'lucide-react';
+import { Plus, Trash, ArrowLeft, ShoppingCart, Truck } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import { fetchWithAuth } from '@/lib/fetchWithAuth';
 import ProtectedRoute from '@/components/ProtectedRoute';
+import ShipmentDispatchCodeCard from '@/components/ShipmentDispatchCodeCard';
+import { useAuth } from '@/contexts/AuthContext';
 
 type Product = {
   id: number;
   name: string;
   price: number;
-  costPrice: number;
+  costPrice?: number;
   stock: number;
   isActive: boolean;
+  isArchived?: boolean;
+  isAlwaysAvailable?: boolean;
+  inStock?: boolean;
 };
 
 type Client = {
@@ -31,29 +36,76 @@ type OrderItem = {
   cost: number;
 };
 
+const salesChannelOptions = [
+  { value: 'RETAIL', label: 'Розничная продажа' },
+  { value: 'WEBSITE', label: 'Интернет-магазин' },
+  { value: 'AVITO', label: 'Avito' },
+  { value: 'OZON', label: 'Ozon' },
+  { value: 'OTHER', label: 'Другое' },
+];
+
+const carrierOptions = [
+  { value: 'AVITO_DELIVERY', label: 'Avito Доставка' },
+  { value: 'AVITO_CDEK', label: 'СДЭК через Avito' },
+  { value: 'AVITO_YANDEX', label: 'Яндекс через Avito' },
+  { value: 'AVITO_POST_RUSSIA', label: 'Почта через Avito' },
+  { value: 'CDEK_PERSONAL', label: 'СДЭК, отправка физлицом' },
+  { value: 'YANDEX_DELIVERY', label: 'Яндекс Доставка' },
+  { value: 'OZON_DELIVERY', label: 'Ozon' },
+  { value: 'POST_RUSSIA', label: 'Почта России' },
+  { value: 'OTHER', label: 'Другая служба' },
+];
+
+function isProductOrderable(product: Product) {
+  if (!product || product.isActive === false || product.isArchived) {
+    return false;
+  }
+  if (product.isAlwaysAvailable) {
+    return true;
+  }
+  if (Number(product.stock || 0) > 0) {
+    return true;
+  }
+  return Boolean(product.inStock);
+}
+
 export default function NewOrderPage() {
   const router = useRouter();
+  const { user } = useAuth();
   const [clients, setClients] = useState<Client[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [clientId, setClientId] = useState<number>(0);
   const [paymentMethod, setPaymentMethod] = useState<'CASH' | 'TRANSFER' | 'TRADE_IN'>('CASH');
+  const [salesChannel, setSalesChannel] = useState('RETAIL');
+  const [fulfillmentMethod, setFulfillmentMethod] = useState<'LOCAL_DELIVERY' | 'TRANSPORT_COMPANY'>('LOCAL_DELIVERY');
+  const [carrier, setCarrier] = useState('AVITO_DELIVERY');
+  const [externalOrderNumber, setExternalOrderNumber] = useState('');
+  const [trackingNumber, setTrackingNumber] = useState('');
+  const [barcode, setBarcode] = useState('');
+  const [senderPoint, setSenderPoint] = useState('');
+  const [receiverPoint, setReceiverPoint] = useState('');
+  const [expectedDeliveryAt, setExpectedDeliveryAt] = useState('');
+  const [expectedPayout, setExpectedPayout] = useState('');
+  const [marketplaceCommission, setMarketplaceCommission] = useState('');
+  const [customerNote, setCustomerNote] = useState('');
   const [comment, setComment] = useState('');
   const [items, setItems] = useState<OrderItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [dataLoading, setDataLoading] = useState(true);
+  const isManager = user?.role === 'MANAGER';
 
   const load = async () => {
     try {
       const [clientsRes, productsRes] = await Promise.all([
         fetchWithAuth('/api/clients?limit=500'),
-        fetchWithAuth('/api/products?isArchived=false&limit=500'),
+        fetchWithAuth('/api/products?isArchived=false&orderable=true&limit=500'),
       ]);
 
       const clientsList = Array.isArray(clientsRes) ? clientsRes : (clientsRes?.items || []);
       setClients(clientsList);
 
       const productsList: Product[] = Array.isArray(productsRes) ? productsRes : (productsRes?.items || []);
-      setProducts(productsList);
+      setProducts(productsList.filter(isProductOrderable));
     } catch (err) {
       console.error('Error loading data:', err);
       toast.error('Ошибка загрузки данных');
@@ -83,7 +135,7 @@ export default function NewOrderPage() {
           name: p.name,
           qty: 1,
           salePrice: Number(p.price),
-          cost: Number(p.costPrice),
+          cost: Number(p.costPrice || 0),
         },
       ]);
     }
@@ -107,6 +159,26 @@ export default function NewOrderPage() {
     const body = {
       clientId,
       paymentMethod,
+      salesChannel,
+      fulfillmentMethod,
+      settlementStatus:
+        fulfillmentMethod === 'TRANSPORT_COMPANY' ? 'AWAITING_CUSTOMER_RECEIPT' : 'NOT_REQUIRED',
+      expectedPayout: expectedPayout || undefined,
+      marketplaceCommission: marketplaceCommission || undefined,
+      shipment:
+        fulfillmentMethod === 'TRANSPORT_COMPANY'
+          ? {
+              carrier,
+              externalOrderNumber: externalOrderNumber || undefined,
+              trackingNumber: trackingNumber || undefined,
+              barcode: barcode || undefined,
+              senderPoint: senderPoint || undefined,
+              receiverPoint: receiverPoint || undefined,
+              expectedDeliveryAt: expectedDeliveryAt || undefined,
+              customerNote: customerNote || undefined,
+              managerComment: comment || undefined,
+            }
+          : undefined,
       comment: comment || undefined,
       items: items.map((i) => ({
         productId: i.productId,
@@ -146,7 +218,7 @@ export default function NewOrderPage() {
 
   return (
     <ProtectedRoute allowedRoles={['ADMIN', 'MANAGER']}>
-      <div className="space-y-6 pb-24 md:pb-6">
+      <div className="space-y-6 pb-6">
         {/* ===== HEADER ===== */}
         <motion.div
           initial={{ opacity: 0, y: -20 }}
@@ -216,6 +288,176 @@ export default function NewOrderPage() {
               />
             </div>
           </div>
+        </motion.div>
+
+        {/* ===== FULFILLMENT ===== */}
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.15 }}
+          className="glass p-6 rounded-xl space-y-4"
+        >
+          <div className="flex items-center gap-3">
+            <div className="p-2 rounded-xl bg-cyan-500/10 border border-cyan-400/30">
+              <Truck className="w-5 h-5 text-cyan-300" />
+            </div>
+            <div>
+              <h2 className="text-lg font-bold text-white">Исполнение заказа</h2>
+              <p className="text-sm text-slate-400">Локальная доставка или отправка через транспортную компанию</p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div>
+              <label className="text-sm text-slate-300 mb-2 block font-bold">Канал продажи</label>
+              <select
+                className="w-full px-4 py-2.5 rounded-lg bg-slate-800/50 border border-slate-600/50 text-white focus:ring-2 focus:ring-cyan-500/50 transition"
+                value={salesChannel}
+                onChange={(e) => setSalesChannel(e.target.value)}
+              >
+                {salesChannelOptions.map((option) => (
+                  <option key={option.value} value={option.value}>{option.label}</option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="text-sm text-slate-300 mb-2 block font-bold">Способ исполнения</label>
+              <select
+                className="w-full px-4 py-2.5 rounded-lg bg-slate-800/50 border border-slate-600/50 text-white focus:ring-2 focus:ring-cyan-500/50 transition"
+                value={fulfillmentMethod}
+                onChange={(e) => setFulfillmentMethod(e.target.value as any)}
+              >
+                <option value="LOCAL_DELIVERY">Локальная доставка</option>
+                <option value="TRANSPORT_COMPANY">Транспортная компания</option>
+              </select>
+            </div>
+
+            {fulfillmentMethod === 'TRANSPORT_COMPANY' && (
+              <div>
+                <label className="text-sm text-slate-300 mb-2 block font-bold">Служба доставки</label>
+                <select
+                  className="w-full px-4 py-2.5 rounded-lg bg-slate-800/50 border border-slate-600/50 text-white focus:ring-2 focus:ring-cyan-500/50 transition"
+                  value={carrier}
+                  onChange={(e) => setCarrier(e.target.value)}
+                >
+                  {carrierOptions.map((option) => (
+                    <option key={option.value} value={option.value}>{option.label}</option>
+                  ))}
+                </select>
+              </div>
+            )}
+          </div>
+
+          {fulfillmentMethod === 'TRANSPORT_COMPANY' && (
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-2">
+              <div>
+                <label className="text-sm text-slate-300 mb-2 block font-bold">Номер заказа площадки</label>
+                <input
+                  className="w-full px-4 py-2.5 rounded-lg bg-slate-800/50 border border-slate-600/50 text-white placeholder:text-slate-500 focus:ring-2 focus:ring-cyan-500/50 transition"
+                  value={externalOrderNumber}
+                  onChange={(e) => setExternalOrderNumber(e.target.value)}
+                  placeholder="Avito / Ozon номер"
+                />
+                {salesChannel === 'AVITO' && externalOrderNumber.trim() ? (
+                  <p className="mt-2 text-xs leading-5 text-cyan-200/80">
+                    Если подключён аккаунт Avito, фоновая синхронизация сможет подтянуть официальный код отправки и ПВЗ по этому номеру заказа.
+                  </p>
+                ) : null}
+              </div>
+              <div>
+                <label className="text-sm text-slate-300 mb-2 block font-bold">Номер отправления</label>
+                <input
+                  className="w-full px-4 py-2.5 rounded-lg bg-slate-800/50 border border-slate-600/50 text-white placeholder:text-slate-500 focus:ring-2 focus:ring-cyan-500/50 transition"
+                  value={trackingNumber}
+                  onChange={(e) => setTrackingNumber(e.target.value)}
+                  placeholder="Трек / номер накладной"
+                />
+              </div>
+              <div>
+                <label className="text-sm text-slate-300 mb-2 block font-bold">Штрихкод отправки</label>
+                <input
+                  className="w-full px-4 py-2.5 rounded-lg bg-slate-800/50 border border-slate-600/50 text-white placeholder:text-slate-500 focus:ring-2 focus:ring-cyan-500/50 transition"
+                  value={barcode}
+                  onChange={(e) => setBarcode(e.target.value)}
+                  placeholder="Только для менеджера"
+                />
+                <p className="mt-2 text-xs leading-5 text-slate-500">
+                  Вставляйте сюда официальный код площадки, если он уже известен. Если поле пустое, CRM построит внутренний сканируемый код по номеру отправления.
+                </p>
+              </div>
+              <div>
+                <label className="text-sm text-slate-300 mb-2 block font-bold">Пункт отправки</label>
+                <input
+                  className="w-full px-4 py-2.5 rounded-lg bg-slate-800/50 border border-slate-600/50 text-white placeholder:text-slate-500 focus:ring-2 focus:ring-cyan-500/50 transition"
+                  value={senderPoint}
+                  onChange={(e) => setSenderPoint(e.target.value)}
+                  placeholder="Куда отнести товар"
+                />
+              </div>
+              <div>
+                <label className="text-sm text-slate-300 mb-2 block font-bold">Пункт получения</label>
+                <input
+                  className="w-full px-4 py-2.5 rounded-lg bg-slate-800/50 border border-slate-600/50 text-white placeholder:text-slate-500 focus:ring-2 focus:ring-cyan-500/50 transition"
+                  value={receiverPoint}
+                  onChange={(e) => setReceiverPoint(e.target.value)}
+                  placeholder="Текстом для клиента"
+                />
+              </div>
+              <div>
+                <label className="text-sm text-slate-300 mb-2 block font-bold">Ожидаемая дата доставки</label>
+                <input
+                  type="date"
+                  className="w-full px-4 py-2.5 rounded-lg bg-slate-800/50 border border-slate-600/50 text-white focus:ring-2 focus:ring-cyan-500/50 transition"
+                  value={expectedDeliveryAt}
+                  onChange={(e) => setExpectedDeliveryAt(e.target.value)}
+                />
+              </div>
+              <div>
+                <label className="text-sm text-slate-300 mb-2 block font-bold">Ожидаемое поступление</label>
+                <input
+                  type="number"
+                  className="w-full px-4 py-2.5 rounded-lg bg-slate-800/50 border border-slate-600/50 text-white placeholder:text-slate-500 focus:ring-2 focus:ring-cyan-500/50 transition"
+                  value={expectedPayout}
+                  onChange={(e) => setExpectedPayout(e.target.value)}
+                  placeholder="Сумма после получения"
+                />
+              </div>
+              <div>
+                <label className="text-sm text-slate-300 mb-2 block font-bold">Комиссия площадки</label>
+                <input
+                  type="number"
+                  className="w-full px-4 py-2.5 rounded-lg bg-slate-800/50 border border-slate-600/50 text-white placeholder:text-slate-500 focus:ring-2 focus:ring-cyan-500/50 transition"
+                  value={marketplaceCommission}
+                  onChange={(e) => setMarketplaceCommission(e.target.value)}
+                  placeholder="Если известна"
+                />
+              </div>
+              <div>
+                <label className="text-sm text-slate-300 mb-2 block font-bold">Комментарий для клиента</label>
+                <input
+                  className="w-full px-4 py-2.5 rounded-lg bg-slate-800/50 border border-slate-600/50 text-white placeholder:text-slate-500 focus:ring-2 focus:ring-cyan-500/50 transition"
+                  value={customerNote}
+                  onChange={(e) => setCustomerNote(e.target.value)}
+                  placeholder="Покажем в личном кабинете"
+                />
+              </div>
+            </div>
+          )}
+
+          {fulfillmentMethod === 'TRANSPORT_COMPANY' &&
+          (barcode.trim() || trackingNumber.trim() || externalOrderNumber.trim()) ? (
+            <div className="pt-2">
+              <ShipmentDispatchCodeCard
+                barcode={barcode}
+                trackingNumber={trackingNumber}
+                externalOrderNumber={externalOrderNumber}
+                senderPoint={senderPoint}
+                receiverPoint={receiverPoint}
+                compact
+              />
+            </div>
+          ) : null}
         </motion.div>
 
         {/* ===== ADD PRODUCT ===== */}
@@ -352,9 +594,11 @@ export default function NewOrderPage() {
                   <div className="flex items-start justify-between mb-3">
                     <div>
                       <div className="font-bold text-white">{it.name}</div>
-                      <div className="text-xs text-slate-500 mt-0.5">
-                        Себестоимость: {it.cost.toLocaleString()} ₽
-                      </div>
+                      {!isManager ? (
+                        <div className="text-xs text-slate-500 mt-0.5">
+                          Себестоимость: {it.cost.toLocaleString()} ₽
+                        </div>
+                      ) : null}
                     </div>
                     <motion.button
                       whileHover={{ scale: 1.1 }}
@@ -418,28 +662,37 @@ export default function NewOrderPage() {
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          className="fixed md:relative bottom-0 left-0 right-0 md:bottom-auto glass p-6 rounded-xl border-t md:border-t-0 border-slate-700/50 backdrop-blur-xl z-30"
+          className="glass p-6 rounded-xl border border-slate-700/50 backdrop-blur-xl"
         >
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4 pb-4 border-b border-slate-700/50">
-            <div>
-              <div className="text-sm text-slate-400">Себестоимость</div>
-              <div className="text-xl font-bold text-slate-300 mt-1">
-                {totals.cost.toLocaleString()} ₽
-              </div>
-            </div>
-            <div>
+          {isManager ? (
+            <div className="mb-4 pb-4 border-b border-slate-700/50">
               <div className="text-sm text-slate-400">Итого к оплате</div>
-              <div className="text-xl font-bold text-cyan-400 mt-1">
+              <div className="text-2xl font-bold text-cyan-400 mt-1">
                 {totals.sum.toLocaleString()} ₽
               </div>
             </div>
-            <div>
-              <div className="text-sm text-slate-400">Прибыль</div>
-              <div className={`text-xl font-bold mt-1 ${totals.profit > 0 ? 'text-green-400' : 'text-rose-400'}`}>
-                {totals.profit.toLocaleString()} ₽
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4 pb-4 border-b border-slate-700/50">
+              <div>
+                <div className="text-sm text-slate-400">Себестоимость</div>
+                <div className="text-xl font-bold text-slate-300 mt-1">
+                  {totals.cost.toLocaleString()} ₽
+                </div>
+              </div>
+              <div>
+                <div className="text-sm text-slate-400">Итого к оплате</div>
+                <div className="text-xl font-bold text-cyan-400 mt-1">
+                  {totals.sum.toLocaleString()} ₽
+                </div>
+              </div>
+              <div>
+                <div className="text-sm text-slate-400">Прибыль</div>
+                <div className={`text-xl font-bold mt-1 ${totals.profit > 0 ? 'text-green-400' : 'text-rose-400'}`}>
+                  {totals.profit.toLocaleString()} ₽
+                </div>
               </div>
             </div>
-          </div>
+          )}
 
           <button
             className="w-full px-6 py-3 rounded-lg bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white font-bold transition text-base disabled:opacity-50 shadow-lg shadow-cyan-500/30"

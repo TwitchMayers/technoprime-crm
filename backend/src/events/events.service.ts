@@ -6,14 +6,14 @@ export class EventsService {
   constructor(private gateway: EventsGateway) {}
 
   notifyUser(userId: number, event: string, data: any) {
-    this.gateway.server.emit(`user:${userId}:${event}`, data);
+    this.gateway.sendToUser(userId, event, data);
   }
 
   broadcast(event: string, data: any) {
-    this.gateway.server.emit(event, data);
+    this.gateway.sendToAll(event, data);
   }
 
   queueUpdated() {
-    this.gateway.server.emit('queueUpdated', { timestamp: Date.now() });
+    this.gateway.sendToAll('queueUpdated', { timestamp: Date.now() });
   }
 }

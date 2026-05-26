@@ -3,8 +3,28 @@
 @tailwind utilities;
 
 @layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+  }
+
   body {
     @apply bg-slate-950 text-slate-100;
+    overflow-x: hidden;
+    min-height: 100dvh;
+    width: 100%;
+  }
+
+  button,
+  [role='button'],
+  a {
+    touch-action: manipulation;
+  }
+
+  *,
+  *::before,
+  *::after {
+    min-width: 0;
   }
 }
 
@@ -204,8 +224,87 @@ tbody tr:last-child {
   scrollbar-width: none;
 }
 
+.crm-chat-pane {
+  height: min(76vh, 760px);
+  max-height: min(76vh, 760px);
+}
+
+@media (max-width: 1279px) {
+  .crm-chat-pane {
+    height: min(64dvh, 720px);
+    max-height: min(64dvh, 720px);
+  }
+}
+
 /* Мобильная адаптация */
 @media (max-width: 768px) {
+  html,
+  body {
+    max-width: 100%;
+  }
+
+  input,
+  select,
+  textarea {
+    min-height: 44px;
+    width: 100%;
+    font-size: 16px;
+  }
+
+  button,
+  a,
+  [role='button'] {
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .glass {
+    border-radius: 16px;
+  }
+
+  .kpi-card {
+    padding: 1rem;
+  }
+
+  table {
+    min-width: max-content;
+  }
+
+  th,
+  td {
+    white-space: nowrap;
+  }
+
+  .mobile-page-shell {
+    @apply space-y-4 pb-[calc(env(safe-area-inset-bottom)+5rem)];
+  }
+
+  .crm-chat-pane {
+    height: calc(100dvh - env(safe-area-inset-top) - env(safe-area-inset-bottom) - 13.25rem);
+    max-height: calc(100dvh - env(safe-area-inset-top) - env(safe-area-inset-bottom) - 13.25rem);
+  }
+
+  .mobile-action-grid {
+    @apply grid grid-cols-2 gap-2;
+  }
+
+  .mobile-action-grid > * {
+    @apply min-h-11 w-full justify-center px-3 text-center text-sm;
+  }
+
+  .mobile-scroll-row {
+    @apply -mx-2 flex gap-2 overflow-x-auto px-2 pb-1 scrollbar-hide;
+    scroll-snap-type: x proximity;
+  }
+
+  .mobile-scroll-row > * {
+    @apply shrink-0;
+    scroll-snap-align: start;
+  }
+
+  .mobile-card-grid {
+    @apply grid grid-cols-1 gap-3;
+  }
+
   .mobile-sidebar {
     @apply fixed inset-y-0 left-0 z-50 w-64 transform transition-transform duration-300;
   }

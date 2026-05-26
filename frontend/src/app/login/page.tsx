@@ -21,16 +21,16 @@ export default function LoginPage() {
   const [remember, setRemember] = useState(true);
   const [loading, setLoading] = useState(false);
   const [leaving, setLeaving] = useState(false);
+  const [forceShowLogin, setForceShowLogin] = useState(false);
 
   // ✅ Редирект если уже авторизован
   useEffect(() => {
     if (isAuthenticated && user) {
-      console.log('✅ Уже авторизован, перенаправление на дашборд');
       setLeaving(true);
-      setTimeout(() => {
-        router.push('/dashboard');
-        router.refresh();
+      const timerId = window.setTimeout(() => {
+        router.replace(user.role === 'MANAGER' ? '/profile' : '/analytics');
       }, 600);
+      return () => window.clearTimeout(timerId);
     }
   }, [isAuthenticated, user, router]);
 
@@ -41,6 +41,19 @@ export default function LoginPage() {
       setLoginInput(savedLogin);
     }
   }, []);
+
+  useEffect(() => {
+    if (!authLoading || isAuthenticated) {
+      setForceShowLogin(false);
+      return undefined;
+    }
+
+    const timerId = window.setTimeout(() => {
+      setForceShowLogin(true);
+    }, 1800);
+
+    return () => window.clearTimeout(timerId);
+  }, [authLoading, isAuthenticated]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -64,17 +77,23 @@ export default function LoginPage() {
 
       // Анимация выхода запускается в useEffect выше
     } catch (err: any) {
-      console.error('❌ Ошибка входа:', err);
       setLoading(false);
     }
   };
 
-  if (authLoading) {
+  if (authLoading && !forceShowLogin) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-black">
         <div className="flex flex-col items-center gap-4">
           <Loader2 className="w-8 h-8 animate-spin text-indigo-400" />
           <span className="text-sm text-neutral-400">Проверка сессии...</span>
+          <button
+            type="button"
+            onClick={() => setForceShowLogin(true)}
+            className="text-xs text-indigo-300/90 hover:text-indigo-200 underline underline-offset-4"
+          >
+            Открыть форму входа
+          </button>
         </div>
       </div>
     );
@@ -85,7 +104,7 @@ export default function LoginPage() {
       <div className="min-h-screen flex items-center justify-center bg-black">
         <div className="flex flex-col items-center gap-4">
           <Loader2 className="w-8 h-8 animate-spin text-indigo-400" />
-          <span className="text-sm text-neutral-400">Перенаправление на дашборд...</span>
+          <span className="text-sm text-neutral-400">Перенаправление в рабочий раздел...</span>
         </div>
       </div>
     );

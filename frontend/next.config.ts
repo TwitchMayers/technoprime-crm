@@ -1,16 +1,16 @@
+import path from "path";
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   reactCompiler: true,
+  turbopack: {
+    root: path.resolve(__dirname, ".."),
+  },
   async rewrites() {
     return [
       {
-        source: '/api/richmarket/:path*',
-        destination: 'http://127.0.0.1:4000/richmarket/:path*',
-      },
-      {
-        source: '/api/technoprime/:path*', 
-        destination: 'http://127.0.0.1:4000/:path*',
+        source: '/assets/:path*',
+        destination: 'http://127.0.0.1:4000/assets/:path*',
       },
     ];
   },

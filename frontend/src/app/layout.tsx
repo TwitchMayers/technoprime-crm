@@ -1,6 +1,7 @@
 'use client';
 
 import type { ReactNode } from 'react';
+import { useEffect } from 'react';
 import './globals.css';
 import Providers from './providers';
 import Sidebar from '@/components/Sidebar';
@@ -16,6 +17,12 @@ export default function RootLayout({
   return (
     <html lang="ru" className="dark">
       <head>
+        <meta name="theme-color" content="#0f172a" />
+        <meta name="apple-mobile-web-app-capable" content="yes" />
+        <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+        <meta name="apple-mobile-web-app-title" content="TechnoPrime CRM" />
+        <link rel="manifest" href="/manifest.webmanifest" />
+        <link rel="apple-touch-icon" href="/apple-icon" />
         <style>{`
           * {
             scrollbar-width: thin;
@@ -38,7 +45,7 @@ export default function RootLayout({
         `}</style>
       </head>
 
-      <body className="min-h-screen text-white overflow-hidden bg-slate-900">
+      <body className="h-[100dvh] overflow-hidden overflow-x-hidden bg-slate-900 text-white">
         {/* ❗️ВАЖНО: AuthProvider ТОЛЬКО В Providers */}
         <Providers>
           <LayoutWrapper>{children}</LayoutWrapper>
@@ -65,19 +72,26 @@ function LayoutWrapper({ children }: { children: ReactNode }) {
 
   // 🔹 Пока AuthContext инициализируется — ничего не рендерим
   if (loading) {
-    return null;
+    return (
+      <div className="flex min-h-[100dvh] items-center justify-center bg-slate-950">
+        <div className="text-center">
+          <div className="mx-auto mb-3 h-9 w-9 animate-spin rounded-full border-4 border-cyan-500 border-t-transparent" />
+          <div className="text-sm text-slate-400">Проверка сессии...</div>
+        </div>
+      </div>
+    );
   }
 
   // 🔹 Неавторизован — AuthContext сам редиректит
   if (!user) {
-    return null;
+    return <UnauthorizedFallback />;
   }
 
   // 🔹 Авторизован — полноценный layout
   return (
-    <div className="flex h-screen bg-slate-900 overflow-hidden">
+    <div className="flex h-[100dvh] bg-slate-900 overflow-hidden">
       {/* Sidebar (desktop) */}
-      <div className="hidden md:block relative z-20">
+      <div className="relative z-20 hidden self-start md:sticky md:top-0 md:block md:h-[100dvh]">
         <Sidebar />
       </div>
 
@@ -87,11 +101,32 @@ function LayoutWrapper({ children }: { children: ReactNode }) {
       </div>
 
       {/* Main content */}
-      <main className="flex-1 flex flex-col overflow-hidden pt-20 md:pt-0">
-        <div className="flex-1 overflow-y-auto overflow-x-hidden px-4 md:px-6 py-4 md:py-6 max-w-full">
+      <main className="flex-1 flex flex-col overflow-hidden pt-[calc(env(safe-area-inset-top)+3.35rem)] md:pt-0">
+        <div className="flex-1 overflow-y-auto overflow-x-hidden px-2.5 py-2.5 sm:px-4 md:px-6 md:py-6 max-w-full">
           {children}
         </div>
       </main>
+    </div>
+  );
+}
+
+function UnauthorizedFallback() {
+  useEffect(() => {
+    const timeoutId = window.setTimeout(() => {
+      if (!window.location.pathname.startsWith('/login')) {
+        window.location.replace('/login');
+      }
+    }, 80);
+
+    return () => window.clearTimeout(timeoutId);
+  }, []);
+
+  return (
+    <div className="flex min-h-[100dvh] items-center justify-center bg-slate-950">
+      <div className="text-center">
+        <div className="mx-auto mb-3 h-9 w-9 animate-spin rounded-full border-4 border-cyan-500 border-t-transparent" />
+        <div className="text-sm text-slate-400">Проверяю доступ и перенаправляю на вход...</div>
+      </div>
     </div>
   );
 }

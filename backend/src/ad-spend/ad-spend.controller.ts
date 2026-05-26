@@ -1,13 +1,24 @@
-import { Body, Controller, Delete, Get, Param, Post, Query } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Post, Query, UseGuards } from '@nestjs/common';
 import { AdSpendService } from './ad-spend.service';
 import { AdSku } from '@prisma/client';
+import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 
 @Controller('ad-spend')
+@UseGuards(JwtAuthGuard)
 export class AdSpendController {
   constructor(private service: AdSpendService) {}
 
   @Post('upsert')
-  upsert(@Body() body: { date?: string; adSku: AdSku; amount: number; note?: string; createdById?: number }) {
+  upsert(
+    @Body()
+    body: {
+      date?: string;
+      adSku: AdSku;
+      amount: number;
+      note?: string;
+      createdById?: number;
+    },
+  ) {
     return this.service.upsert(body);
   }
 

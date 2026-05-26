@@ -5,7 +5,7 @@ export const formatCurrency = (value: number): string => {
 export const formatCompactNumber = (value: number): string => {
   return new Intl.NumberFormat('ru-RU', {
     notation: value >= 10000 ? 'compact' : 'standard',
-    maximumFractionDigits: 1
+    maximumFractionDigits: 1,
   }).format(value);
 };
 

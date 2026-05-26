@@ -3,13 +3,14 @@
 import { useEffect, useState } from 'react';
 import { User, Settings as SettingsIcon } from 'lucide-react';
 import Link from 'next/link';
+import { fetchWithAuth } from '@/lib/fetchWithAuth';
 
 export default function UserMenu() {
   const [open, setOpen] = useState(false);
   const [me, setMe] = useState<any>(null);
 
   useEffect(() => {
-    fetch('/api/me').then(r=>r.json()).then(setMe).catch(()=>null);
+    fetchWithAuth('/api/me').then(r=>r.json()).then(setMe).catch(()=>null);
   }, []);
 
   const name = me?.name || (me?.firstName || me?.lastName ? `${me.firstName||''} ${me.lastName||''}`.trim() : 'Профиль');
@@ -38,7 +39,7 @@ export default function UserMenu() {
             <Link className="block px-3 py-2 rounded hover:bg-white/10 transition text-sm" href="/profile">
               Личный кабинет
             </Link>
-            {me?.role === 'ADMIN' && (
+            {(me?.role === 'ADMIN' || me?.role === 'SUPER_ADMIN') && (
               <Link className="block px-3 py-2 rounded hover:bg-white/10 transition text-sm" href="/profile/admin">
                 Админ‑панель
               </Link>

@@ -2,9 +2,10 @@
 
 import { useEffect, useState } from 'react';
 import { X, User, Phone, MapPin, Package } from 'lucide-react';
+import { fetchWithAuth } from '@/lib/fetchWithAuth';
 
 type ProductLike = { name?:string; serialNumber?:string; category?:string; brand?:string; model?:string };
-type OrderItem = { qty:number; product?:ProductLike };
+type OrderItem = { qty:number; serialNumber?: string | null; inventoryUnits?: Array<{ serialNumber?: string | null }>; product?:ProductLike };
 type Order = {
   id:number;
   status?:string;
@@ -22,16 +23,21 @@ export default function TaskDetailsModal({ orderId, open, onClose }:{
   useEffect(() => {
     if (!open || !orderId) return;
     setLoading(true);
-    fetch(`/api/orders/${orderId}`, { cache:'no-store' })
-      .then(async (r) => r.ok ? r.json() : null)
-      .then(setData)
+    fetchWithAuth(`/api/orders/${orderId}`)
+      .then((order) => {
+        setData(order && typeof order === 'object' ? (order as Order) : null);
+      })
       .catch(() => setData(null))
       .finally(() => setLoading(false));
   }, [open, orderId]);
 
   if (!open) return null;
 
-  const serial = (p?:ProductLike) => p?.serialNumber || '—';
+  const serial = (item?: OrderItem) =>
+    item?.serialNumber ||
+    item?.inventoryUnits?.find((unit) => unit.serialNumber)?.serialNumber ||
+    item?.product?.serialNumber ||
+    '—';
   const pname  = (p?:ProductLike) => p?.name || [p?.brand, p?.model].filter(Boolean).join(' ') || '—';
 
   return (
@@ -127,7 +133,7 @@ export default function TaskDetailsModal({ orderId, open, onClose }:{
                         <tr key={i} className="border-t border-white/5">
                           <td className="p-2">{pname(it.product)}</td>
                           <td className="p-2">
-                            <span className="font-mono text-xs text-teal-400">{serial(it.product)}</span>
+                            <span className="font-mono text-xs text-teal-400">{serial(it)}</span>
                           </td>
                           <td className="p-2 text-slate-400">{it.product?.category || '—'}</td>
                           <td className="p-2 text-center font-semibold">{it.qty}</td>

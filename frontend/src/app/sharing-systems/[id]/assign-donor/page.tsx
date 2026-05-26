@@ -4,12 +4,13 @@ import { useState, useCallback, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { 
   ArrowLeft, Search, Users, Calendar, Mail, Key, 
-  Shield, QrCode, Check, Play, StopCircle
+  Shield, QrCode, Check
 } from 'lucide-react';
 import Link from 'next/link';
 import { toast } from 'sonner';
 import { motion } from 'framer-motion';
 import { fetchWithAuth } from '@/lib/fetchWithAuth';
+import { getSharingConsoleMeta, type SharingConsoleType } from '@/lib/sharing';
 
 type Client = {
   id: number;
@@ -23,8 +24,9 @@ type SharingSystem = {
   id: number;
   name: string;
   donor: {
-    consoleType: 'PS4' | 'PS5';
+	    consoleType: SharingConsoleType;
     subscriptionType: string;
+    startDate: string;
     endDate: string;
   };
 };
@@ -47,10 +49,26 @@ export default function AssignDonorPage() {
     notes: 'Вход через QR для донорской консоли',
   });
 
+  const toInputDate = (value?: string | null) => {
+    if (!value) return null;
+    const parsed = new Date(value);
+    if (Number.isNaN(parsed.getTime())) return null;
+    return parsed.toISOString().split('T')[0];
+  };
+
   const loadSystem = async () => {
     try {
       const data = await fetchWithAuth(`/api/sharing-systems/${params.id}`);
       setSystem(data);
+      const donorStart = toInputDate(data?.donor?.startDate);
+      const donorEnd = toInputDate(data?.donor?.endDate);
+      if (donorStart || donorEnd) {
+        setFormData((prev) => ({
+          ...prev,
+          startDate: donorStart || prev.startDate,
+          endDate: donorEnd || prev.endDate,
+        }));
+      }
     } catch (error) {
       console.error('Error loading system:', error);
       toast.error('Ошибка загрузки системы шеринга');
@@ -268,17 +286,16 @@ export default function AssignDonorPage() {
                 <div>
                   <div className="text-sm text-slate-400">Тип консоли</div>
                   <div className="font-semibold text-white flex items-center gap-2 mt-1">
-                    {system?.donor.consoleType === 'PS5' ? (
-                      <>
-                        <Play className="w-5 h-5 text-teal-400" />
-                        PlayStation 5
-                      </>
-                    ) : (
-                      <>
-                        <StopCircle className="w-5 h-5 text-blue-400" />
-                        PlayStation 4
-                      </>
-                    )}
+	                    {(() => {
+	                      const meta = getSharingConsoleMeta(system?.donor.consoleType);
+	                      const Icon = meta.icon;
+	                      return (
+	                        <>
+	                          <Icon className={`h-5 w-5 ${meta.textClass}`} />
+	                          {system?.donor.consoleType?.startsWith('XBOX') ? 'Xbox' : meta.fullLabel}
+	                        </>
+	                      );
+	                    })()}
                   </div>
                 </div>
                 <div>

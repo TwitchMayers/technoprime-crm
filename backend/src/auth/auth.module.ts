@@ -9,13 +9,25 @@ import { PrismaService } from '../prisma.service';
 @Module({
   imports: [
     PassportModule,
-    JwtModule.register({
-      secret: process.env.JWT_SECRET || 'your-secret-key-change-in-production',
-      signOptions: { expiresIn: '7d' },
+    JwtModule.registerAsync({
+      useFactory: async () => {
+        const secret = String(process.env.JWT_SECRET || '').trim();
+        const expiresIn = process.env.JWT_EXPIRES_IN || '12h';
+        if (!secret) {
+          throw new Error('JWT_SECRET is required');
+        }
+
+        return {
+          secret,
+          signOptions: {
+            expiresIn: expiresIn as any,
+          },
+        };
+      },
     }),
   ],
   controllers: [AuthController],
   providers: [AuthService, JwtStrategy, PrismaService],
-  exports: [AuthService],
+  exports: [AuthService, JwtModule],
 })
 export class AuthModule {}

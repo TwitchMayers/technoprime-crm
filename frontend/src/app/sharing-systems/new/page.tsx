@@ -2,11 +2,19 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft, Save, Users, Play, StopCircle, Globe, Calendar, Key, Mail, Lock, Shield, AlertCircle } from 'lucide-react';
+import { ArrowLeft, Save, Users, Globe, Calendar, Key, Mail, Lock, Shield, AlertCircle } from 'lucide-react';
 import Link from 'next/link';
 import { toast } from 'sonner';
 import { motion } from 'framer-motion';
 import { fetchWithAuth } from '@/lib/fetchWithAuth';
+import {
+  getDefaultSharingConsoleType,
+  getSharingConsoleMeta,
+  getSharingConsoleTypesForSubscription,
+  isSharingConsoleCompatibleWithSubscription,
+  type SharingConsoleType,
+  type SharingSubscriptionType,
+} from '@/lib/sharing';
 
 export default function NewSharingSystemPage() {
   const router = useRouter();
@@ -15,13 +23,13 @@ export default function NewSharingSystemPage() {
   const [formData, setFormData] = useState({
     // Основная информация
     name: '',
-    donorConsoleType: 'PS5' as 'PS4' | 'PS5',
+    donorConsoleType: 'PS5' as SharingConsoleType,
     
     // Данные донора
     donorEmail: '',
     donorPassword: '',
     region: '🇺🇦 Украина',
-    subscriptionType: 'PS_PLUS' as 'PS_PLUS' | 'GAME_PASS' | 'EA_PLAY',
+    subscriptionType: 'PS_PLUS' as SharingSubscriptionType,
     subscriptionPeriod: 'YEAR' as 'MONTH' | 'THREE_MONTHS' | 'YEAR',
     
     // Данные аккаунта
@@ -38,6 +46,26 @@ export default function NewSharingSystemPage() {
     backupCodes: '',
     notes: '',
   });
+
+  const chooseDonorConsoleType = (donorConsoleType: SharingConsoleType) => {
+    setFormData({
+      ...formData,
+      donorConsoleType,
+      subscriptionType: donorConsoleType.startsWith('XBOX') ? 'GAME_PASS' : formData.subscriptionType,
+    });
+  };
+
+  const chooseSubscriptionType = (subscriptionType: SharingSubscriptionType) => {
+    setFormData((prev) => ({
+      ...prev,
+      subscriptionType,
+      donorConsoleType: isSharingConsoleCompatibleWithSubscription(subscriptionType, prev.donorConsoleType)
+        ? prev.donorConsoleType
+        : getDefaultSharingConsoleType(subscriptionType),
+    }));
+  };
+
+  const donorConsoleOptions = getSharingConsoleTypesForSubscription(formData.subscriptionType);
 
   const createSystem = async () => {
     if (!formData.name || !formData.donorEmail || !formData.donorPassword) {
@@ -80,7 +108,7 @@ export default function NewSharingSystemPage() {
           <h1 className="text-2xl font-bold bg-gradient-to-r from-purple-400 to-teal-400 bg-clip-text text-transparent">
             Новая система шеринга
           </h1>
-          <p className="text-slate-400 mt-1">Создание системы общего доступа PlayStation Plus</p>
+          <p className="text-slate-400 mt-1">Создание системы общего доступа для PlayStation и Xbox</p>
         </div>
       </div>
 
@@ -112,31 +140,30 @@ export default function NewSharingSystemPage() {
                   <label className="block text-sm font-medium text-slate-300 mb-2">
                     Тип консоли донора *
                   </label>
-                  <div className="grid grid-cols-2 gap-4">
-                    <button
-                      type="button"
-                      onClick={() => setFormData({...formData, donorConsoleType: 'PS5'})}
-                      className={`p-6 rounded-xl border-2 transition-all ${
-                        formData.donorConsoleType === 'PS5'
-                          ? 'border-teal-500 bg-teal-500/10'
-                          : 'border-slate-600 bg-slate-800/30'
-                      }`}
-                    >
-                      <Play className="w-8 h-8 mb-3 mx-auto text-teal-400" />
-                      <div className="font-semibold text-center text-white">PlayStation 5</div>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setFormData({...formData, donorConsoleType: 'PS4'})}
-                      className={`p-6 rounded-xl border-2 transition-all ${
-                        formData.donorConsoleType === 'PS4'
-                          ? 'border-blue-500 bg-blue-500/10'
-                          : 'border-slate-600 bg-slate-800/30'
-                    }`}
-                    >
-                      <StopCircle className="w-8 h-8 mb-3 mx-auto text-blue-400" />
-                      <div className="font-semibold text-center text-white">PlayStation 4</div>
-                    </button>
+	                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+	                    {donorConsoleOptions.map((type) => {
+	                      const meta = getSharingConsoleMeta(type);
+	                      const Icon = meta.icon;
+	                      const selected = formData.donorConsoleType === type;
+                      return (
+                        <button
+                          key={type}
+                          type="button"
+                          onClick={() => chooseDonorConsoleType(type)}
+                          className={`rounded-xl border-2 p-5 transition-all ${
+                            selected ? meta.activeClass : 'border-slate-600 bg-slate-800/30'
+                          }`}
+                        >
+	                          <Icon className={`mx-auto mb-3 h-8 w-8 ${meta.textClass}`} />
+	                          <div className="text-center font-semibold text-white">
+	                            {meta.fullLabel}
+	                          </div>
+	                          <div className="mt-1 text-center text-xs text-slate-400">
+	                            {meta.description}
+	                          </div>
+	                        </button>
+                      );
+                    })}
                   </div>
                 </div>
 
@@ -165,9 +192,9 @@ export default function NewSharingSystemPage() {
             <div>
               <h3 className="text-md font-semibold text-white mb-3">Тип подписки</h3>
               <div className="grid grid-cols-3 gap-3">
-                <button
-                  type="button"
-                  onClick={() => setFormData({...formData, subscriptionType: 'PS_PLUS'})}
+	                <button
+	                  type="button"
+	                  onClick={() => chooseSubscriptionType('PS_PLUS')}
                   className={`p-4 rounded-xl border-2 ${
                     formData.subscriptionType === 'PS_PLUS'
                       ? 'border-blue-500 bg-blue-500/10'
@@ -176,9 +203,9 @@ export default function NewSharingSystemPage() {
                 >
                   <div className="text-sm font-medium text-center text-white">PS Plus</div>
                 </button>
-                <button
-                  type="button"
-                  onClick={() => setFormData({...formData, subscriptionType: 'GAME_PASS'})}
+	                <button
+	                  type="button"
+	                  onClick={() => chooseSubscriptionType('GAME_PASS')}
                   className={`p-4 rounded-xl border-2 ${
                     formData.subscriptionType === 'GAME_PASS'
                       ? 'border-green-500 bg-green-500/10'
@@ -187,9 +214,9 @@ export default function NewSharingSystemPage() {
                 >
                   <div className="text-sm font-medium text-center text-white">Game Pass</div>
                 </button>
-                <button
-                  type="button"
-                  onClick={() => setFormData({...formData, subscriptionType: 'EA_PLAY'})}
+	                <button
+	                  type="button"
+	                  onClick={() => chooseSubscriptionType('EA_PLAY')}
                   className={`p-4 rounded-xl border-2 ${
                     formData.subscriptionType === 'EA_PLAY'
                       ? 'border-orange-500 bg-orange-500/10'
@@ -227,7 +254,7 @@ export default function NewSharingSystemPage() {
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-slate-300 mb-2">
-                      Пароль от PS
+	                      Пароль от аккаунта
                     </label>
                     <div className="relative">
                       <Key className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />

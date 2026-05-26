@@ -8,6 +8,7 @@ import {
   Post,
   Query,
   Req,
+  UnauthorizedException,
   Delete,
   UseGuards,
 } from '@nestjs/common';
@@ -30,16 +31,6 @@ export class OrdersController {
     @Query('page') page?: string,
     @Query('limit') limit?: string,
   ) {
-    console.log('📋 Orders GET:', {
-      status,
-      assigneeId,
-      q,
-      dateFrom,
-      dateTo,
-      page,
-      limit,
-    });
-
     return this.ordersService.list({
       status,
       assigneeId,
@@ -54,21 +45,19 @@ export class OrdersController {
   // ✅ Очередь новых заказов (ДОЛЖНА БЫТЬ ПЕРЕД /:id)
   @Get('queue')
   async queue() {
-    console.log('📋 Orders QUEUE');
     return this.ordersService.queue();
   }
 
   // ✅ Получить один заказ (ПОСЛЕ /queue)
   @Get(':id')
   async findOne(@Param('id') id: string) {
-    console.log('📋 Order GET:', id);
     return this.ordersService.findOne(Number(id));
   }
 
   // ✅ Создать заказ
   @Post()
   async create(@Body() body: any, @Req() req: any) {
-    const userId = Number(req?.user?.id ?? 1);
+    const userId = Number(req?.user?.id);
     const clientId = Number(body?.clientId);
     const paymentMethod = String(body?.paymentMethod || 'CASH').toUpperCase();
     const comment = body?.comment ? String(body.comment) : '';
@@ -81,31 +70,32 @@ export class OrdersController {
       }))
       .filter((i: any) => i.productId > 0);
 
-    console.log('📝 Creating order:', {
-      clientId,
-      paymentMethod,
-      itemsCount: items.length,
-      userId,
-    });
-
     if (!clientId) throw new BadRequestException('clientId is required');
     if (!items.length) throw new BadRequestException('At least one item is required');
+    if (!userId) throw new UnauthorizedException('Unauthorized');
 
     return this.ordersService.create(
-      { clientId, paymentMethod: paymentMethod as any, comment, items },
+      {
+        clientId,
+        paymentMethod: paymentMethod as any,
+        comment,
+        items,
+        salesChannel: body?.salesChannel,
+        fulfillmentMethod: body?.fulfillmentMethod,
+        settlementStatus: body?.settlementStatus,
+        expectedPayout: body?.expectedPayout,
+        actualPayout: body?.actualPayout,
+        marketplaceCommission: body?.marketplaceCommission,
+        shipment: body?.shipment,
+      },
       userId,
     );
   }
 
   // ✅ Назначить заказ - PATCH /api/orders/:id/assign
   @Patch(':id/assign')
-  async assignPatch(
-    @Param('id') id: string,
-    @Body() body: any,
-    @Req() req: any,
-  ) {
+  async assignPatch(@Param('id') id: string, @Body() body: any, @Req() req: any) {
     const assigneeId = Number(body?.assigneeId ?? req?.user?.id ?? 0);
-    console.log(`📌 Assigning order ${id} to ${assigneeId}`);
     return this.ordersService.assign(Number(id), assigneeId);
   }
 
@@ -113,58 +103,69 @@ export class OrdersController {
   @Post(':id/assign')
   async assignPost(@Param('id') id: string, @Body() body: any, @Req() req: any) {
     const assigneeId = Number(body?.assigneeId ?? req?.user?.id ?? 0);
-    console.log(`📌 Assigning order ${id} to ${assigneeId}`);
     return this.ordersService.assign(Number(id), assigneeId);
+  }
+
+  @Post(':id/send-to-tasks')
+  async sendToTasks(@Param('id') id: string, @Req() req: any) {
+    const actorId = Number(req?.user?.id ?? 0);
+    return this.ordersService.sendLeadToTasks(Number(id), actorId);
+  }
+
+  @Get(':id/lead-inventory-options')
+  async leadInventoryOptions(@Param('id') id: string) {
+    return this.ordersService.getLeadInventoryOptions(Number(id));
+  }
+
+  @Patch(':id/lead')
+  async updateLead(@Param('id') id: string, @Body() body: any, @Req() req: any) {
+    const actorId = Number(req?.user?.id ?? 0);
+    return this.ordersService.updateLead(
+      Number(id),
+      {
+        name: body?.name,
+        phone: body?.phone,
+        city: body?.city,
+        address: body?.address,
+        comment: body?.comment,
+        inventoryUnitId: body?.inventoryUnitId,
+      },
+      actorId,
+    );
+  }
+
+  @Post(':id/extend-reserve')
+  async extendReserve(@Param('id') id: string, @Body() body: any, @Req() req: any) {
+    const actorId = Number(req?.user?.id ?? 0);
+    const minutes = Number(body?.minutes ?? 15);
+    return this.ordersService.extendReserve(Number(id), minutes, actorId);
   }
 
   // ✅ Изменить статус заказа - PATCH /api/orders/:id/status
   @Patch(':id/status')
-  async setStatusPatch(
-    @Param('id') id: string,
-    @Body() body: any,
-    @Req() req: any,
-  ) {
+  async setStatusPatch(@Param('id') id: string, @Body() body: any, @Req() req: any) {
     const status = String(body?.status || 'NEW');
-    const archiveOnComplete = !!body?.archiveOnComplete;
+    const archiveOnComplete =
+      body?.archiveOnComplete === undefined ? undefined : Boolean(body?.archiveOnComplete);
     const managerId = Number(body?.managerId ?? req?.user?.id ?? 0);
 
-    console.log(
-      `📊 Patching order ${id} status to ${status}, archive=${archiveOnComplete}, manager=${managerId}`,
-    );
-    return this.ordersService.setStatus(
-      Number(id),
-      status as any,
-      archiveOnComplete,
-      managerId,
-    );
+    return this.ordersService.setStatus(Number(id), status as any, archiveOnComplete, managerId);
   }
 
   // ✅ Изменить статус заказа - POST /api/orders/:id/status
   @Post(':id/status')
-  async setStatusPost(
-    @Param('id') id: string,
-    @Body() body: any,
-    @Req() req: any,
-  ) {
+  async setStatusPost(@Param('id') id: string, @Body() body: any, @Req() req: any) {
     const status = String(body?.status || 'NEW');
-    const archiveOnComplete = !!body?.archiveOnComplete;
+    const archiveOnComplete =
+      body?.archiveOnComplete === undefined ? undefined : Boolean(body?.archiveOnComplete);
     const managerId = Number(body?.managerId ?? req?.user?.id ?? 0);
 
-    console.log(
-      `📊 Posting order ${id} status to ${status}, archive=${archiveOnComplete}, manager=${managerId}`,
-    );
-    return this.ordersService.setStatus(
-      Number(id),
-      status as any,
-      archiveOnComplete,
-      managerId,
-    );
+    return this.ordersService.setStatus(Number(id), status as any, archiveOnComplete, managerId);
   }
 
   // ✅ Получить комментарии заказа
   @Get(':id/comments')
   async getComments(@Param('id') id: string) {
-    console.log('💬 Getting comments for order:', id);
     return this.ordersService.comments(Number(id));
   }
 
@@ -176,7 +177,6 @@ export class OrdersController {
     @Req() req: any,
   ) {
     const authorId = body.authorId ?? req?.user?.id;
-    console.log('💬 Adding comment to order:', id, 'by user:', authorId);
 
     if (!body.text?.trim()) {
       throw new BadRequestException('Comment text is required');
@@ -188,8 +188,10 @@ export class OrdersController {
   // ✅ Удалить заказ
   @Delete(':id')
   async delete(@Param('id') id: string, @Req() req: any) {
-    const adminId = Number(req?.user?.id ?? 1);
-    console.log('🗑️ Deleting order:', id, 'by admin:', adminId);
+    const adminId = Number(req?.user?.id);
+    if (!adminId) {
+      throw new UnauthorizedException('Unauthorized');
+    }
     return this.ordersService.delete(Number(id), adminId);
   }
 }

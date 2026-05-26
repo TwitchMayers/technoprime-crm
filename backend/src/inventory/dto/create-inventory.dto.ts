@@ -3,7 +3,16 @@ import { ProductCategory } from '@prisma/client';
 
 export class CreateInventoryDto {
   @IsString()
-  serialNumber!: string;
+  @IsOptional()
+  serialNumber?: string;
+
+  @IsNumber()
+  @IsOptional()
+  productId?: number;
+
+  @IsString()
+  @IsOptional()
+  name?: string;
 
   @IsString()
   @IsOptional()
@@ -24,6 +33,18 @@ export class CreateInventoryDto {
   @IsNumber()
   @IsOptional()
   price?: number;
+
+  @IsString()
+  @IsOptional()
+  version?: string;
+
+  @IsNumber()
+  @IsOptional()
+  memoryGb?: number;
+
+  @IsString()
+  @IsOptional()
+  variantKey?: string;
 
   @IsString()
   @IsOptional()

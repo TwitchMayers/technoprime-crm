@@ -14,6 +14,7 @@ type Product = {
   category: string;
   brand?: string;
   model?: string;
+  storefrontCategory?: string | null;
   stock: number;
   price: number;
   costPrice: number;
@@ -95,8 +96,8 @@ export default function ProductsPage() {
     }
   };
 
-  const canManage = hasRole('ADMIN', 'MANAGER', 'TECHNICAL_SPECIALIST');
-  const canDelete = hasRole('ADMIN', 'MANAGER');
+  const canManage = hasRole('ADMIN', 'TECHNICAL_SPECIALIST', 'SUPER_ADMIN');
+  const canDelete = hasRole('ADMIN', 'SUPER_ADMIN');
 
   const totalStock = products.reduce((sum, p) => sum + p.stock, 0);
   const totalValue = products.reduce((sum, p) => sum + (p.stock * p.price), 0);
@@ -114,7 +115,7 @@ export default function ProductsPage() {
   };
 
   return (
-    <ProtectedRoute allowedRoles={['ADMIN', 'MANAGER', 'TECHNICAL_SPECIALIST']}>
+    <ProtectedRoute allowedRoles={['ADMIN', 'TECHNICAL_SPECIALIST', 'SUPER_ADMIN']}>
       <div className="space-y-6">
         {/* ✅ Header - ИСПРАВЛЕНО */}
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -271,6 +272,7 @@ export default function ProductsPage() {
               const cat = categoryIcons[product.category] || categoryIcons.CONSOLE;
               const profit = product.price - product.costPrice;
               const stockStatus = product.stock > 10 ? 'high' : product.stock > 0 ? 'low' : 'out';
+              const isShowcaseCard = Boolean(product.storefrontCategory);
               const Icon = cat.icon;
 
               return (
@@ -297,6 +299,11 @@ export default function ProductsPage() {
                   <p className="text-sm text-slate-400 mb-4">{cat.label}</p>
 
                   {product.brand && <p className="text-xs text-slate-500 mb-3">{product.brand} {product.model}</p>}
+                  {isShowcaseCard ? (
+                    <p className="text-xs text-slate-400 mb-3">
+                      Карточка витрины не удаляется и не архивируется складскими действиями
+                    </p>
+                  ) : null}
 
                   <div className="space-y-2 mb-4 p-3 rounded-lg bg-slate-800/30 border border-slate-600/50">
                     <div className="flex justify-between text-sm">
@@ -330,18 +337,22 @@ export default function ProductsPage() {
                       <>
                         <button
                           onClick={() => handleArchive(product.id)}
+                          disabled={isShowcaseCard}
                           className={`px-3 py-2 rounded-lg text-sm font-medium transition ${
                             showArchived
                               ? 'bg-teal-500/20 text-teal-400 border border-teal-500/30'
                               : 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
-                          }`}
+                          } ${isShowcaseCard ? 'opacity-40 cursor-not-allowed' : ''}`}
+                          title={isShowcaseCard ? 'Карточки витрины не архивируются' : ''}
                         >
                           <Archive className="w-4 h-4" />
                         </button>
                         {!showArchived && (
                           <button
                             onClick={() => handleDelete(product.id)}
-                            className="px-3 py-2 rounded-lg bg-rose-500/20 text-rose-400 border border-rose-500/30 text-sm font-medium transition hover:bg-rose-500/40"
+                            disabled={isShowcaseCard}
+                            className={`px-3 py-2 rounded-lg bg-rose-500/20 text-rose-400 border border-rose-500/30 text-sm font-medium transition hover:bg-rose-500/40 ${isShowcaseCard ? 'opacity-40 cursor-not-allowed' : ''}`}
+                            title={isShowcaseCard ? 'Карточки витрины не удаляются' : ''}
                           >
                             <Trash2 className="w-4 h-4" />
                           </button>

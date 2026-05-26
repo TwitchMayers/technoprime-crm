@@ -1,7 +1,8 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { getSocket } from '@/lib/socket';
+import { CRM_LIVE_NOTIFICATION_EVENT } from '@/lib/crm-events';
 import { toast } from 'sonner';
 import { Bell } from 'lucide-react';
 
@@ -10,16 +11,8 @@ type Notif = { id?:string; type?:string; title?:string; text?:string; createdAt?
 export default function NotificationBell() {
   const [open, setOpen] = useState(false);
   const [list, setList] = useState<Notif[]>([]);
-  const asked = useRef(false);
 
   useEffect(() => {
-    if (typeof window !== 'undefined' && 'Notification' in window && !asked.current) {
-      asked.current = true;
-      if (Notification.permission === 'default') {
-        Notification.requestPermission().catch(()=>null);
-      }
-    }
-
     const s = getSocket();
     const onNotif = (n: any) => {
       const item: Notif = {
@@ -31,14 +24,38 @@ export default function NotificationBell() {
       };
       setList(prev => [item, ...prev].slice(0, 50));
       toast.info(item.title, { description: item.text });
-      if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
+      if (
+        typeof document !== 'undefined' &&
+        document.hidden &&
+        typeof window !== 'undefined' &&
+        'Notification' in window &&
+        Notification.permission === 'granted'
+      ) {
         try { new Notification(item.title || 'Уведомление', { body: item.text || '' }); } catch {}
       }
     };
 
     s.on('notification', onNotif);
     s.on('notify', onNotif);
-    return () => { s.off('notification', onNotif); s.off('notify', onNotif); };
+    const onLiveNotif = (event: Event) => {
+      const n = (event as CustomEvent<any>).detail;
+      if (!n) return;
+      const item: Notif = {
+        id: n?.id || String(Date.now()),
+        type: n?.type || n?.source,
+        title: n?.title || 'Уведомление',
+        text: n?.text,
+        createdAt: n?.createdAt || new Date().toISOString(),
+      };
+      setList(prev => [item, ...prev].slice(0, 50));
+    };
+
+    window.addEventListener(CRM_LIVE_NOTIFICATION_EVENT, onLiveNotif as EventListener);
+    return () => {
+      s.off('notification', onNotif);
+      s.off('notify', onNotif);
+      window.removeEventListener(CRM_LIVE_NOTIFICATION_EVENT, onLiveNotif as EventListener);
+    };
   }, []);
 
   return (

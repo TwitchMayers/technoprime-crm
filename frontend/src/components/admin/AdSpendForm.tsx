@@ -1,5 +1,6 @@
 'use client';
 import { useEffect, useState } from 'react';
+import { fetchWithAuth } from '@/lib/fetchWithAuth';
 
 const AD_SKUS = ['PS5','PS4','XBOX_ONE_S','XBOX_SERIES_S','XBOX_SERIES_X','NINTENDO_SWITCH','STEAM_DECK'] as const;
 type AdSku = typeof AD_SKUS[number];
@@ -21,7 +22,7 @@ export default function AdSpendForm() {
   const loadForDate = async () => {
     setLoading(true);
     try {
-      const res = await fetch(`/api/ad-spend?from=${date}&to=${date}`).then(r=>r.json()).catch(()=>[]);
+      const res = await fetchWithAuth(`/api/ad-spend?from=${date}&to=${date}`).then(r=>r.json()).catch(()=>[]);
       const map = new Map<string, any>();
       (res||[]).forEach((r:any)=> map.set(r.adSku, r));
       setRows(AD_SKUS.map(s => {
@@ -36,7 +37,7 @@ export default function AdSpendForm() {
   const save = async (r: Row) => {
     const amount = Number((r.amount || '').replace(',', '.')) || 0;
     const body = { date, adSku: r.adSku, amount, note: r.note };
-    const res = await fetch('/api/ad-spend', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) });
+    const res = await fetchWithAuth('/api/ad-spend', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) });
     if (!res.ok) {
       const t = await res.text().catch(()=> '');
       setMsg(t || 'Ошибка сохранения'); setTimeout(()=>setMsg(null), 2500);

@@ -1,11 +1,13 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Search, Plus, Users, Play, StopCircle, AlertTriangle, Sparkles, TrendingUp } from 'lucide-react';
+import { Search, Plus, Users, AlertTriangle, Sparkles, TrendingUp } from 'lucide-react';
 import Link from 'next/link';
 import { toast } from 'sonner';
 import { motion } from 'framer-motion';
 import { fetchWithAuth } from '@/lib/fetchWithAuth';
+import MobilePageHeader from '@/components/MobilePageHeader';
+import { getSharingConsoleMeta, getSharingSlotTypes, getSlotStat, type SharingConsoleType } from '@/lib/sharing';
 
 type SharingSystem = {
   id: number;
@@ -20,7 +22,7 @@ type SharingSystem = {
   donor: {
     id: number;
     email: string;
-    consoleType: 'PS4' | 'PS5';
+	    consoleType: SharingConsoleType;
     endDate: string;
     isActive: boolean;
   };
@@ -32,7 +34,7 @@ type SharingSystem = {
       name: string;
       phone: string;
     };
-    consoleType: 'PS4' | 'PS5';
+	    consoleType: SharingConsoleType;
     startDate: string;
     endDate: string;
     isActive: boolean;
@@ -40,6 +42,8 @@ type SharingSystem = {
   slotStats: {
     ps5: { used: number; max: number; available: number };
     ps4: { used: number; max: number; available: number };
+    xbox1?: { used: number; max: number; available: number };
+    xbox2?: { used: number; max: number; available: number };
   };
 };
 
@@ -79,7 +83,7 @@ export default function SharingSystemsPage() {
     total: systems.length,
     active: systems.filter(s => s.isActive && !s.isExpired).length,
     expiring: systems.filter(s => s.isExpiringSoon).length,
-    utilized: systems.length > 0 ? Math.round((systems.reduce((sum, s) => sum + s.usedSlots, 0) / (systems.length * 3)) * 100) : 0,
+    utilized: systems.length > 0 ? Math.round((systems.reduce((sum, s) => sum + s.usedSlots, 0) / Math.max(1, systems.reduce((sum, s) => sum + s.totalSlots, 0))) * 100) : 0,
   };
 
   const containerVariants = {
@@ -96,18 +100,33 @@ export default function SharingSystemsPage() {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="mobile-page-shell md:space-y-6 md:pb-6">
+      <MobilePageHeader
+        title="Системы шеринга"
+        subtitle={`${stats.total} систем · ${stats.active} активных`}
+        sticky={false}
+        action={
+          <Link
+            href="/sharing-systems/new"
+            className="inline-flex h-10 w-10 items-center justify-center rounded-2xl bg-gradient-to-r from-purple-600 to-pink-600 text-white shadow-lg shadow-pink-500/20"
+            aria-label="Новая система"
+          >
+            <Plus className="h-4 w-4" />
+          </Link>
+        }
+      />
+
       {/* Header */}
       <motion.div
         initial={{ opacity: 0, y: -20 }}
         animate={{ opacity: 1, y: 0 }}
-        className="flex items-center justify-between gap-4"
+        className="hidden items-center justify-between gap-4 md:flex"
       >
         <div>
           <h1 className="text-3xl font-bold bg-gradient-to-r from-purple-400 via-pink-400 to-teal-400 bg-clip-text text-transparent">
             Системы шеринга
           </h1>
-          <p className="text-slate-400 text-sm mt-1">Управление общим доступом PlayStation Plus</p>
+          <p className="text-slate-400 text-sm mt-1">Управление общим доступом PlayStation и Xbox</p>
         </div>
         <motion.div
           whileHover={{ scale: 1.05 }}
@@ -128,7 +147,7 @@ export default function SharingSystemsPage() {
         variants={containerVariants}
         initial="hidden"
         animate="visible"
-        className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4"
+        className="grid grid-cols-2 gap-2.5 sm:grid-cols-2 md:gap-4 lg:grid-cols-4"
       >
         {[
           { label: 'Всего систем', value: stats.total, icon: Users, color: 'from-blue-500 to-cyan-500' },
@@ -139,15 +158,15 @@ export default function SharingSystemsPage() {
           <motion.div
             key={idx}
             variants={itemVariants}
-            className={`glass p-4 rounded-xl border border-slate-700/50 bg-gradient-to-br ${color}/10`}
+            className={`glass min-w-0 rounded-xl border border-slate-700/50 bg-gradient-to-br ${color}/10 p-3 sm:p-4`}
           >
-            <div className="flex items-center justify-between">
-              <div>
-                <div className="text-sm text-slate-400 mb-1">{label}</div>
-                <div className="text-3xl font-bold text-white">{value}</div>
+            <div className="flex min-w-0 items-start justify-between gap-2 sm:items-center">
+              <div className="min-w-0">
+                <div className="mb-1 line-clamp-2 text-[11px] leading-4 text-slate-400 sm:text-sm">{label}</div>
+                <div className="break-words text-2xl font-bold leading-tight text-white sm:text-3xl">{value}</div>
               </div>
-              <div className={`p-3 rounded-lg bg-gradient-to-br ${color} opacity-20`}>
-                <Icon className="w-6 h-6 text-white" />
+              <div className={`shrink-0 rounded-lg bg-gradient-to-br ${color} p-2 opacity-20 sm:p-3`}>
+                <Icon className="h-5 w-5 text-white sm:h-6 sm:w-6" />
               </div>
             </div>
           </motion.div>
@@ -159,9 +178,9 @@ export default function SharingSystemsPage() {
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.1 }}
-        className="glass p-4 rounded-xl border border-slate-700/50"
+        className="glass rounded-xl border border-slate-700/50 p-3 sm:p-4"
       >
-        <div className="flex flex-col md:flex-row gap-4">
+        <div className="flex flex-col gap-3 md:flex-row md:gap-4">
           <div className="flex-1 relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
             <input
@@ -171,7 +190,7 @@ export default function SharingSystemsPage() {
               onChange={(e) => setSearch(e.target.value)}
             />
           </div>
-          <div className="flex gap-2 overflow-x-auto pb-2 md:pb-0">
+          <div className="mobile-scroll-row md:mx-0 md:flex md:gap-2 md:px-0 md:pb-0">
             {[
               { key: 'all', label: 'Все' },
               { key: 'active', label: 'Активные' },
@@ -181,7 +200,7 @@ export default function SharingSystemsPage() {
               <button
                 key={key}
                 onClick={() => setFilter(key as any)}
-                className={`px-4 py-2 rounded-lg transition-all whitespace-nowrap font-medium text-sm ${
+                className={`min-h-10 rounded-lg px-4 py-2 text-sm font-medium whitespace-nowrap transition-all ${
                   filter === key
                     ? 'bg-gradient-to-r from-purple-600 to-teal-600 text-white shadow-lg'
                     : 'bg-slate-800/50 text-slate-300 hover:bg-slate-700/50 border border-slate-600/50'
@@ -213,14 +232,14 @@ export default function SharingSystemsPage() {
           variants={containerVariants}
           initial="hidden"
           animate="visible"
-          className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"
+          className="grid grid-cols-1 gap-3 md:grid-cols-2 md:gap-5 lg:grid-cols-3"
         >
           {filteredSystems.map((system) => (
             <motion.div
               key={system.id}
               variants={itemVariants}
               whileHover={{ y: -5 }}
-              className="glass p-6 rounded-xl border border-slate-700/50 hover:border-slate-600/80 transition-all group"
+              className="glass group rounded-xl border border-slate-700/50 p-4 transition-all hover:border-slate-600/80 sm:p-6"
             >
               {/* Header */}
               <div className="flex items-start justify-between mb-4">
@@ -243,17 +262,18 @@ export default function SharingSystemsPage() {
                   <div>
                     <div className="text-xs text-slate-400">Консоль</div>
                     <div className="flex items-center gap-1.5 mt-1">
-                      {system.donor.consoleType === 'PS5' ? (
-                        <>
-                          <Play className="w-4 h-4 text-teal-400" />
-                          <span className="font-bold text-white">PS5</span>
-                        </>
-                      ) : (
-                        <>
-                          <StopCircle className="w-4 h-4 text-blue-400" />
-                          <span className="font-bold text-white">PS4</span>
-                        </>
-                      )}
+                      {(() => {
+                        const meta = getSharingConsoleMeta(system.donor.consoleType);
+                        const Icon = meta.icon;
+                        return (
+                          <>
+                            <Icon className={`h-4 w-4 ${meta.textClass}`} />
+                            <span className="font-bold text-white">
+                              {system.donor.consoleType.startsWith('XBOX') ? 'Xbox' : meta.label}
+                            </span>
+                          </>
+                        );
+                      })()}
                     </div>
                   </div>
                   <div className="text-right">
@@ -282,14 +302,16 @@ export default function SharingSystemsPage() {
                   />
                 </div>
                 <div className="grid grid-cols-2 gap-2 mt-2">
-                  <div className="text-xs">
-                    <span className="text-slate-400">PS5:</span>
-                    <span className="text-teal-400 font-semibold ml-1">{system.slotStats?.ps5?.used}/{system.slotStats?.ps5?.max}</span>
-                  </div>
-                  <div className="text-xs">
-                    <span className="text-slate-400">PS4:</span>
-                    <span className="text-blue-400 font-semibold ml-1">{system.slotStats?.ps4?.used}/{system.slotStats?.ps4?.max}</span>
-                  </div>
+                  {getSharingSlotTypes(system.donor.consoleType).map((slotType) => {
+                    const meta = getSharingConsoleMeta(slotType);
+                    const stat = getSlotStat(system.slotStats, slotType);
+                    return (
+                      <div key={slotType} className="text-xs">
+                        <span className="text-slate-400">{meta.label}:</span>
+                        <span className={`${meta.textClass} ml-1 font-semibold`}>{stat.used}/{stat.max}</span>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
 

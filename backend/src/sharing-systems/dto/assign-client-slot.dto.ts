@@ -7,8 +7,8 @@ export class AssignClientSlotDto {
   @IsInt()
   clientId: number;
 
-  @IsEnum(['PS4', 'PS5'])
-  consoleType: 'PS4' | 'PS5';
+  @IsEnum(['PS4', 'PS5', 'XBOX_1', 'XBOX_2'])
+  consoleType: 'PS4' | 'PS5' | 'XBOX_1' | 'XBOX_2';
 
   @IsDateString()
   startDate: string;
