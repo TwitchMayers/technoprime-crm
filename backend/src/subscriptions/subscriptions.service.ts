@@ -424,8 +424,6 @@ export class SubscriptionsService {
       where: { id },
     });
 
-    console.log(`🗑️ Subscription ${id} deleted by user ${userId}`);
-
     return {
       success: true,
       message: `Подписка ${subscription.type} удалена`,

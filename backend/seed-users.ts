@@ -3,11 +3,30 @@ import * as bcrypt from 'bcrypt';
 
 const prisma = new PrismaClient();
 
+function assertDangerousScriptAllowed() {
+  if (process.env.ALLOW_DANGEROUS_SCRIPT !== 'true') {
+    console.error(
+      'DANGEROUS LEGACY SCRIPT blocked. Set ALLOW_DANGEROUS_SCRIPT=true only for an audited local maintenance run.',
+    );
+    process.exit(1);
+  }
+}
+
+function requireEnv(name: string) {
+  const value = String(process.env[name] || '').trim();
+  if (!value) {
+    throw new Error(`${name} is required for this dangerous maintenance script`);
+  }
+  return value;
+}
+
 async function main() {
+  assertDangerousScriptAllowed();
+
   // Хешируем пароли
-  const adminPassword = await bcrypt.hash('admin123', 10);
-  const managerPassword = await bcrypt.hash('manager123', 10);
-  const techPassword = await bcrypt.hash('tech123', 10);
+  const adminPassword = await bcrypt.hash(requireEnv('SEED_ADMIN_PASSWORD'), 10);
+  const managerPassword = await bcrypt.hash(requireEnv('SEED_MANAGER_PASSWORD'), 10);
+  const techPassword = await bcrypt.hash(requireEnv('SEED_TECH_PASSWORD'), 10);
 
   // Создаем админа
   const admin = await prisma.employee.upsert({
@@ -26,7 +45,6 @@ async function main() {
 
   console.log('✅ Создан ADMIN:', {
     login: 'admin',
-    password: 'admin123',
     role: 'ADMIN',
   });
 
@@ -47,7 +65,6 @@ async function main() {
 
   console.log('✅ Создан MANAGER:', {
     login: 'manager',
-    password: 'manager123',
     role: 'MANAGER',
   });
 
@@ -68,7 +85,6 @@ async function main() {
 
   console.log('✅ Создан TECHNICAL_SPECIALIST:', {
     login: 'tech',
-    password: 'tech123',
     role: 'TECHNICAL_SPECIALIST',
   });
 
@@ -76,17 +92,14 @@ async function main() {
   console.log('─────────────────────────────────────────');
   console.log('👤 ADMIN:');
   console.log('   Логин: admin');
-  console.log('   Пароль: admin123');
   console.log('   Доступ: Все разделы + Дашборд\n');
 
   console.log('👤 MANAGER:');
   console.log('   Логин: manager');
-  console.log('   Пароль: manager123');
   console.log('   Доступ: Клиенты, Товары, Заказы, Подписки\n');
 
   console.log('👤 TECHNICAL_SPECIALIST:');
   console.log('   Логин: tech');
-  console.log('   Пароль: tech123');
   console.log('   Доступ: Товары (добавление), Задачи (только свои)\n');
 }
 

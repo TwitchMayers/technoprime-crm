@@ -75,12 +75,11 @@ export default function NewSharingSystemPage() {
 
     setLoading(true);
     try {
-      const response = await fetchWithAuth('/api/sharing-systems', {
+      await fetchWithAuth('/api/sharing-systems', {
         method: 'POST',
         body: JSON.stringify(formData),
       });
 
-      console.log('✅ System created:', response);
       toast.success('Система шеринга создана!');
       router.push('/sharing-systems');
     } catch (error: any) {

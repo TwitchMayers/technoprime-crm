@@ -129,8 +129,6 @@ export default function AssignClientPage() {
         `sharing-systems/search-clients?q=${encodeURIComponent(search.trim())}&sharingSystemId=${params.id}`
       );
       
-      console.log('🔍 Search response:', response);
-      
       let items = [];
       if (Array.isArray(response)) {
         items = response;
@@ -139,8 +137,6 @@ export default function AssignClientPage() {
       } else if (response?.data) {
         items = response.data;
       }
-      
-      console.log('📋 Available clients:', items);
       setClients(items);
       
       if (items.length === 0) {
@@ -185,8 +181,6 @@ export default function AssignClientPage() {
         notes: formData.notes,
       };
 
-      console.log('📤 Sending assign data:', data);
-      
       await fetchWithAuth('sharing-systems/assign-client', {
         method: 'POST',
         body: JSON.stringify(data),

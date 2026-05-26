@@ -188,13 +188,12 @@ export default function NewOrderPage() {
     };
 
     try {
-      const response = await fetchWithAuth('/api/orders', {
+      await fetchWithAuth('/api/orders', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
       });
 
-      console.log('Order created:', response);
       toast.success('Заказ успешно создан');
       router.push('/orders');
     } catch (e: any) {

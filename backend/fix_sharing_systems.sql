@@ -1,3 +1,14 @@
+\if :{?ALLOW_DANGEROUS_SCRIPT}
+\else
+\echo 'DANGEROUS LEGACY SQL SCRIPT blocked. Re-run with psql -v ALLOW_DANGEROUS_SCRIPT=true only for an audited local maintenance run.'
+\quit 1
+\endif
+\if :ALLOW_DANGEROUS_SCRIPT
+\else
+\echo 'DANGEROUS LEGACY SQL SCRIPT blocked. ALLOW_DANGEROUS_SCRIPT must be true.'
+\quit 1
+\endif
+
 -- Добавляем новые типы если их нет
 DO $$ 
 BEGIN 

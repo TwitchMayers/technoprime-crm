@@ -76,7 +76,6 @@ export default function TaskDetailPage() {
       };
 
       setTask(normalizedTask);
-      console.log('Task loaded:', taskData.id);
     } catch (error) {
       console.error('Failed to load task:', error);
       toast.error('Ошибка загрузки задачи');
@@ -106,8 +105,6 @@ export default function TaskDetailPage() {
 
     setActionLoading(true);
     try {
-      console.log('Assigning order:', task.orderId, 'to user:', user.id);
-      
       const response = await fetchWithAuth(
         `orders/${task.orderId}/assign`,
         {
@@ -123,13 +120,10 @@ export default function TaskDetailPage() {
         throw new Error('Empty response from server');
       }
 
-      console.log('Order assigned successfully');
       toast.success('Заказ назначен вам');
       
       // Update task status
       await updateTaskStatus('IN_PROGRESS', true);
-      
-      console.log('Task updated to IN_PROGRESS');
     } catch (error) {
       console.error('Failed to assign order:', error);
       const errorMessage = error instanceof Error ? error.message : 'Неизвестная ошибка';
@@ -148,10 +142,8 @@ export default function TaskDetailPage() {
 
     setActionLoading(true);
     try {
-      console.log('Completing task:', task.id);
       await updateTaskStatus('DONE');
       
-      console.log('Task completed');
       toast.success('Задача завершена');
       
       // Редирект на список задач
@@ -174,8 +166,6 @@ export default function TaskDetailPage() {
     if (!taskId) return;
 
     try {
-      console.log('Updating task status to:', newStatus);
-      
       const response = await fetchWithAuth(`tasks/${taskId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
@@ -192,13 +182,6 @@ export default function TaskDetailPage() {
 
       setTask(response);
       
-      const statusLabels: Record<string, string> = {
-        'NEW': 'Новая',
-        'IN_PROGRESS': 'В работе',
-        'DONE': 'Завершена',
-      };
-
-      console.log('Status updated:', statusLabels[newStatus]);
       return response;
     } catch (error) {
       console.error('Failed to update task status:', error);

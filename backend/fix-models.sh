@@ -1,4 +1,12 @@
 #!/bin/bash
+set -euo pipefail
+
+if [ "${ALLOW_DANGEROUS_SCRIPT:-}" != "true" ]; then
+  echo "DANGEROUS LEGACY SCRIPT blocked. Set ALLOW_DANGEROUS_SCRIPT=true only for an audited local maintenance run." >&2
+  exit 1
+fi
+
+echo "DANGEROUS LEGACY SCRIPT - DO NOT RUN IN PRODUCTION"
 
 echo "Исправление имен моделей в коде..."
 

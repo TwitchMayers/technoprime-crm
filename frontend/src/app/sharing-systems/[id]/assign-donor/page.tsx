@@ -145,8 +145,6 @@ export default function AssignDonorPage() {
         notes: formData.notes,
       };
 
-      console.log('📤 Sending assign donor data:', data);
-      
       await fetchWithAuth('/api/sharing-systems/assign-donor-client', {
         method: 'POST',
         body: JSON.stringify(data),

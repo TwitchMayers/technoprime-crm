@@ -348,8 +348,6 @@ export class SharingSystemsService {
       // Удаляем донорский аккаунт
       await tx.donorAccount.delete({ where: { id: system.donor.id } });
 
-      console.log(`✅ Система шеринга #${id} удалена вместе с донором`);
-
       return { message: 'Система шеринга успешно удалена' };
     });
   }
@@ -513,8 +511,6 @@ export class SharingSystemsService {
         where: { id: slotId },
       });
 
-      console.log(`✅ Клиент ${slot.client?.name} отвязан от системы (слот #${slotId})`);
-
       return {
         success: true,
         message: `Клиент отвязан от системы`,
@@ -578,8 +574,6 @@ export class SharingSystemsService {
         const hasActiveSlots = client.clientSlots && client.clientSlots.length > 0;
         return !hasActiveSlots; // Возвращаем ТОЛЬКО доступных
       });
-
-      console.log(`🔍 Найдено ${availableClients.length} доступных клиентов из ${clients.length}`);
 
       return availableClients;
     } catch (error) {

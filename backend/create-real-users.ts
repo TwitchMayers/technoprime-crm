@@ -3,7 +3,29 @@ import * as bcrypt from 'bcrypt';
 
 const prisma = new PrismaClient();
 
+function assertDangerousScriptAllowed() {
+  if (process.env.ALLOW_DANGEROUS_SCRIPT !== 'true') {
+    console.error(
+      'DANGEROUS LEGACY SCRIPT blocked. Set ALLOW_DANGEROUS_SCRIPT=true only for an audited local maintenance run.',
+    );
+    process.exit(1);
+  }
+}
+
+function requireEnv(name: string) {
+  const value = String(process.env[name] || '').trim();
+  if (!value) {
+    throw new Error(`${name} is required for this dangerous maintenance script`);
+  }
+  return value;
+}
+
 async function main() {
+  assertDangerousScriptAllowed();
+
+  const managerPassword = requireEnv('CREATE_REAL_MANAGER_PASSWORD');
+  const adminPassword = requireEnv('CREATE_REAL_ADMIN_PASSWORD');
+
   await prisma.employee.updateMany({
     where: {
       OR: [
@@ -20,7 +42,7 @@ async function main() {
   await prisma.employee.upsert({
     where: { login: 'manager' },
     update: {
-      passwordHash: await bcrypt.hash('manager2025', 10),
+      passwordHash: await bcrypt.hash(managerPassword, 10),
       name: 'Менеджер',
       firstName: 'Менеджер',
       lastName: 'TechnoPrime',
@@ -31,7 +53,7 @@ async function main() {
     },
     create: {
       login: 'manager',
-      passwordHash: await bcrypt.hash('manager2025', 10),
+      passwordHash: await bcrypt.hash(managerPassword, 10),
       name: 'Менеджер',
       firstName: 'Менеджер',
       lastName: 'TechnoPrime',
@@ -45,7 +67,7 @@ async function main() {
   await prisma.employee.upsert({
     where: { login: 'admin' },
     update: {
-      passwordHash: await bcrypt.hash('admin123', 10),
+      passwordHash: await bcrypt.hash(adminPassword, 10),
       name: 'Администратор',
       firstName: 'Админ',
       lastName: 'Системы',
@@ -56,7 +78,7 @@ async function main() {
     },
     create: {
       login: 'admin',
-      passwordHash: await bcrypt.hash('admin123', 10),
+      passwordHash: await bcrypt.hash(adminPassword, 10),
       name: 'Администратор',
       firstName: 'Админ',
       lastName: 'Системы',
@@ -71,11 +93,9 @@ async function main() {
   console.log('─────────────────────────────────────────');
   console.log('👤 SUPER_ADMIN (тестовый):');
   console.log('   Логин: admin');
-  console.log('   Пароль: admin123\n');
   
   console.log('👤 MANAGER:');
   console.log('   Логин: manager');
-  console.log('   Пароль: manager2025\n');
 }
 
 main()
